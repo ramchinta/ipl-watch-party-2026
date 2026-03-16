@@ -1,47 +1,56 @@
-name: Deploy Cloud Functions
+name: Deploy Frontend to Firebase Hosting
 
 on:
   push:
-    branches:
-      - main
-    paths:
-      - 'functions/**'
+    branches: [main]
   workflow_dispatch:
 
 jobs:
-  deploy_functions:
-    name: Build & Deploy Cloud Functions
+  build_and_deploy:
     runs-on: ubuntu-latest
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 20
+      - name: Setup Node 20
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
-      - name: Install Firebase CLI
-        run: npm install -g firebase-tools
-
-      - name: Install functions dependencies
-        working-directory: functions
+      - name: Install dependencies
+        working-directory: frontend
         run: npm install
 
-      - name: Build TypeScript
-        working-directory: functions
+      - name: Write env file
+        working-directory: frontend
+        run: |
+          echo "VITE_FIREBASE_API_KEY=${{ secrets.VITE_FIREBASE_API_KEY }}" >> .env.local
+          echo "VITE_FIREBASE_AUTH_DOMAIN=${{ secrets.VITE_FIREBASE_AUTH_DOMAIN }}" >> .env.local
+          echo "VITE_FIREBASE_PROJECT_ID=${{ secrets.VITE_FIREBASE_PROJECT_ID }}" >> .env.local
+          echo "VITE_FIREBASE_STORAGE_BUCKET=${{ secrets.VITE_FIREBASE_STORAGE_BUCKET }}" >> .env.local
+          echo "VITE_FIREBASE_MESSAGING_SENDER_ID=${{ secrets.VITE_FIREBASE_MESSAGING_SENDER_ID }}" >> .env.local
+          echo "VITE_FIREBASE_APP_ID=${{ secrets.VITE_FIREBASE_APP_ID }}" >> .env.local
+          echo "VITE_APP_URL=${{ secrets.VITE_APP_URL }}" >> .env.local
+          echo "VITE_USE_EMULATORS=false" >> .env.local
+
+      - name: Build
+        working-directory: frontend
         run: npm run build
 
-      - name: Write service account key to file
-        run: |
-          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > /tmp/sa-key.json
+      - name: Deploy to Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          repoToken: ${{ secrets.GITHUB_TOKEN }}
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          channelId: live
+          projectId: ${{ secrets.VITE_FIREBASE_PROJECT_ID }}
 
-      - name: Deploy Cloud Functions
+      - name: Deploy Firestore rules
         run: |
-          export GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa-key.json
-          firebase deploy --only functions \
+          npm install -g firebase-tools
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > /tmp/sa.json
+          export GOOGLE_APPLICATION_CREDENTIALS=/tmp/sa.json
+          firebase deploy --only firestore:rules,firestore:indexes \
             --project ${{ secrets.VITE_FIREBASE_PROJECT_ID }} \
             --non-interactive
