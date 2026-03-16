@@ -11,7 +11,7 @@ function ist(dateStr: string, timeStr: string): Timestamp {
   return Timestamp.fromMillis(utcMs)
 }
 
-export const IPL_2026_FIXTURES: Omit<Match, 'id'>[] & { id: string }[] = [
+export const IPL_2026_FIXTURES: Match[] = [
   // ── PHASE 1 (official BCCI announcement) ──────────────────────────────
   {
     id: 'M01', matchNumber: 1,
