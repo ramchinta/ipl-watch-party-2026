@@ -1,76 +1,43 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Helper functions
-    function isAuthenticated() {
-      return request.auth != null;
-    }
-    function isAdmin() {
-      return isAuthenticated() && request.auth.token.role == 'admin';
-    }
-    function isHost() {
-      return isAuthenticated() && request.auth.token.role == 'host';
-    }
-    function isUser() {
-      return isAuthenticated();
-    }
+    function isAuthenticated() { return request.auth != null; }
+    function isAdmin() { return isAuthenticated() && request.auth.token.role == 'admin'; }
+    function isHost() { return isAuthenticated() && request.auth.token.role == 'host'; }
     function isPartyHost(partyId) {
       return isAuthenticated() &&
         get(/databases/$(database)/documents/watchParties/$(partyId)).data.hostId == request.auth.uid;
     }
-
-    // Admin collection — only admins
-    match /admins/{adminId} {
-      allow read, write: if isAdmin();
+    match /config/{docId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
     }
-
-    // IPL Matches — admin writes, everyone reads
     match /matches/{matchId} {
       allow read: if isAuthenticated();
       allow write: if isAdmin();
     }
-
-    // Watch parties — hosts create/manage their own
     match /watchParties/{partyId} {
       allow read: if isAuthenticated();
       allow create: if isHost();
       allow update: if isAdmin() || isPartyHost(partyId);
       allow delete: if isAdmin() || isPartyHost(partyId);
     }
-
-    // Users — own profile
     match /users/{userId} {
       allow read: if isAuthenticated();
       allow create, update: if isAuthenticated() && request.auth.uid == userId;
       allow delete: if isAdmin();
     }
-
-    // Predictions — users write own, read all in same party
     match /predictions/{predId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() &&
-        request.resource.data.userId == request.auth.uid;
-      allow update: if isAuthenticated() &&
-        resource.data.userId == request.auth.uid &&
-        resource.data.locked == false;
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid && resource.data.locked == false;
       allow delete: if isAdmin();
     }
-
-    // Prediction windows — admin or party host writes
-    match /predictionWindows/{windowId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin() || isPartyHost(windowId.split('_')[0]);
-    }
-
-    // Leaderboard — functions write, all read
-    match /leaderboards/{partyId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin(); // Cloud Functions use admin SDK
-    }
-
-    // Scores — functions write, all read
     match /scores/{scoreId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+    match /leaderboards/{partyId} {
       allow read: if isAuthenticated();
       allow write: if isAdmin();
     }
