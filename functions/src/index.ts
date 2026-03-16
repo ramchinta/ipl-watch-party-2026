@@ -20,7 +20,7 @@ export const onMatchResultUpdated = functions.firestore
       const pred = predDoc.data()
       const scoreRef = db.doc(`scores/${pred.partyId}_${pred.userId}`)
       const scoreSnap = await scoreRef.get()
-      if (!scoreSnap.exists()) continue
+      if (!scoreSnap.exists) continue
       const score = scoreSnap.data()!
       let tossPoints = score.tossPoints || 0
       let matchPoints = score.matchPoints || 0
@@ -62,12 +62,12 @@ export const registerHost = functions.https.onCall(async (data, context) => {
   const { name, inviteCode } = data
   const uid = context.auth.uid
   const configSnap = await db.doc('config/hostInvite').get()
-  const validCode = configSnap.exists() ? configSnap.data()?.code : null
+  const validCode = configSnap.exists ? configSnap.data()?.code : null
   if (!validCode) throw new functions.https.HttpsError('failed-precondition', 'Host registration is not configured. Contact admin.')
   if (!inviteCode || inviteCode.trim().toUpperCase() !== validCode.toUpperCase()) throw new functions.https.HttpsError('permission-denied', 'Invalid invite code')
   if (!name || name.trim().length < 2) throw new functions.https.HttpsError('invalid-argument', 'Name must be at least 2 characters')
   const existing = await db.doc(`users/${uid}`).get()
-  if (existing.exists()) {
+  if (existing.exists) {
     const role = existing.data()?.role
     if (role === 'admin') throw new functions.https.HttpsError('already-exists', 'Already an admin')
     if (role === 'host') throw new functions.https.HttpsError('already-exists', 'Already a host')
