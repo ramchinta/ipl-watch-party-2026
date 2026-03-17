@@ -8,8 +8,9 @@ import { subscribeToUserPrediction } from '../../services/predictionService'
 import type { WatchParty, Match, LeaderboardEntry, Prediction } from '../../types'
 import { POINTS } from '../../types'
 import { PageHeader, StatusBadge, TeamBadge, LBRow, Spinner } from '../../components/shared'
-import { formatMatchDate } from '../../utils/helpers'
-import toast from 'react-hot-toast'
+import { formatMatchDate, rankEmoji } from '../../utils/helpers'
+
+type View = 'party' | 'leaderboard'
 
 export default function UserPartyPage() {
   const { partyId } = useParams<{ partyId: string }>()
@@ -21,6 +22,7 @@ export default function UserPartyPage() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([])
   const [prediction, setPrediction] = useState<Prediction | null>(null)
   const [loading, setLoading] = useState(true)
+  const [view, setView] = useState<View>('party')
 
   useEffect(() => {
     if (!partyId) return
@@ -41,7 +43,6 @@ export default function UserPartyPage() {
     return () => u4()
   }, [partyId, party?.matchId, firebaseUser])
 
-  // Auto-join if user got here via link
   useEffect(() => {
     if (!party || !firebaseUser) return
     if (!party.members.includes(firebaseUser.uid)) {
@@ -61,7 +62,7 @@ export default function UserPartyPage() {
   const pp2Open = pp?.team2Open
   const anyOpen = tossOpen || matchOpen || pp1Open || pp2Open
 
-  // Build prediction summary for closed windows
+  // Closed predictions for results section
   const closedPredictions = []
   if (match && !tossOpen) {
     closedPredictions.push({
@@ -69,8 +70,7 @@ export default function UserPartyPage() {
       yourPick: prediction?.tossWinner,
       actual: match.tossWinner,
       pts: prediction?.tossWinner && match.tossWinner
-        ? prediction.tossWinner === match.tossWinner ? POINTS.TOSS_CORRECT : 0
-        : null,
+        ? (prediction.tossWinner === match.tossWinner ? POINTS.TOSS_CORRECT : 0) : null,
     })
   }
   if (match && !matchOpen) {
@@ -79,25 +79,22 @@ export default function UserPartyPage() {
       yourPick: prediction?.matchWinner,
       actual: match.result?.winner,
       pts: prediction?.matchWinner && match.result?.winner
-        ? prediction.matchWinner === match.result.winner ? POINTS.MATCH_CORRECT : 0
-        : null,
+        ? (prediction.matchWinner === match.result.winner ? POINTS.MATCH_CORRECT : 0) : null,
     })
   }
   if (pp && !pp1Open && match) {
     closedPredictions.push({
       label: `${match.team1} Powerplay`,
-      yourPick: prediction?.powerplayGuess1 !== undefined && prediction?.powerplayGuess1 !== null
-        ? `${prediction.powerplayGuess1} runs` : undefined,
-      actual: pp.team1Score !== undefined ? `${pp.team1Score} runs` : undefined,
+      yourPick: prediction?.powerplayGuess1 != null ? `${prediction.powerplayGuess1} runs` : undefined,
+      actual: pp.team1Score != null ? `${pp.team1Score} runs` : undefined,
       pts: prediction?.powerplayPoints1 ?? null,
     })
   }
   if (pp && !pp2Open && match) {
     closedPredictions.push({
       label: `${match.team2} Powerplay`,
-      yourPick: prediction?.powerplayGuess2 !== undefined && prediction?.powerplayGuess2 !== null
-        ? `${prediction.powerplayGuess2} runs` : undefined,
-      actual: pp.team2Score !== undefined ? `${pp.team2Score} runs` : undefined,
+      yourPick: prediction?.powerplayGuess2 != null ? `${prediction.powerplayGuess2} runs` : undefined,
+      actual: pp.team2Score != null ? `${pp.team2Score} runs` : undefined,
       pts: prediction?.powerplayPoints2 ?? null,
     })
   }
@@ -106,165 +103,213 @@ export default function UserPartyPage() {
     <div className="min-h-screen bg-gray-50">
       <PageHeader title={party.name} subtitle={`Hosted by ${party.hostName}`} onBack={() => navigate('/home')} />
 
+      {/* Tab toggle — Party vs Leaderboard */}
+      <div className="bg-white border-b border-gray-100 sticky top-[52px] z-30">
+        <div className="max-w-sm mx-auto flex">
+          {(['party', 'leaderboard'] as View[]).map(v => (
+            <button key={v} onClick={() => setView(v)}
+              className={`flex-1 py-3 text-sm font-semibold transition-colors relative ${
+                view === v ? 'text-ipl-orange' : 'text-gray-400 hover:text-gray-600'
+              }`}>
+              {view === v && <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-12 h-0.5 bg-ipl-orange rounded-full" />}
+              {v === 'party' ? '🏏 Party' : `📊 Leaderboard${leaderboard.length > 0 ? ` (${leaderboard.length})` : ''}`}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="max-w-sm mx-auto px-4 py-5 space-y-4">
 
-        {/* Party info */}
-        <div className="card p-4 flex items-center justify-between">
-          <div>
-            <div className="text-xs text-gray-400 mb-1">Status</div>
-            <StatusBadge status={party.status} />
-          </div>
-          <div className="text-right">
-            <div className="text-xs text-gray-400 mb-1">Join Code</div>
-            <div className="font-mono font-bold text-ipl-orange tracking-widest">{party.joinCode}</div>
-          </div>
-        </div>
-
-        {/* Match info */}
-        {match && (
-          <div className="card p-4">
-            <div className="flex items-center gap-2 mb-2">
-              <TeamBadge team={match.team1} size="md" />
-              <span className="text-gray-400 text-sm font-medium">vs</span>
-              <TeamBadge team={match.team2} size="md" />
-            </div>
-            <div className="text-xs text-gray-500">{match.venue} · {match.city}</div>
-            <div className="text-xs text-gray-400 mt-0.5">{formatMatchDate(match.matchDate)} · {match.timeIST}</div>
-          </div>
-        )}
-
-        {/* ── OPEN PREDICTIONS — shown on TOP ── */}
-        {party.status === 'active' && anyOpen && (
-          <div className="card p-4 border-2 border-ipl-orange/30 bg-ipl-orange-light">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-              <span className="text-sm font-semibold text-ipl-orange">Predictions Open!</span>
-            </div>
-
-            {/* Open windows summary */}
-            <div className="space-y-1.5 mb-3">
-              {tossOpen && (
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-gray-600">Toss Prediction</span>
-                  <div className="flex items-center gap-1.5">
-                    {prediction?.tossWinner
-                      ? <span className="font-medium text-green-600">Picked: {prediction.tossWinner}</span>
-                      : <span className="text-red-500">Not picked yet</span>
-                    }
-                    <span className="text-gray-400">+{POINTS.TOSS_CORRECT}pts</span>
-                  </div>
-                </div>
-              )}
-              {matchOpen && (
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-gray-600">Match Winner</span>
-                  <div className="flex items-center gap-1.5">
-                    {prediction?.matchWinner
-                      ? <span className="font-medium text-green-600">Picked: {prediction.matchWinner}</span>
-                      : <span className="text-red-500">Not picked yet</span>
-                    }
-                    <span className="text-gray-400">+{POINTS.MATCH_CORRECT}pts</span>
-                  </div>
-                </div>
-              )}
-              {pp1Open && match && (
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-gray-600">{match.team1} Powerplay</span>
-                  <div className="flex items-center gap-1.5">
-                    {prediction?.powerplayGuess1 !== undefined && prediction?.powerplayGuess1 !== null
-                      ? <span className="font-medium text-green-600">{prediction.powerplayGuess1} runs</span>
-                      : <span className="text-red-500">Not guessed yet</span>
-                    }
-                    <span className="text-gray-400">up to +{POINTS.POWERPLAY_EXACT}pts</span>
-                  </div>
-                </div>
-              )}
-              {pp2Open && match && (
-                <div className="flex items-center justify-between text-xs">
-                  <span className="text-gray-600">{match.team2} Powerplay</span>
-                  <div className="flex items-center gap-1.5">
-                    {prediction?.powerplayGuess2 !== undefined && prediction?.powerplayGuess2 !== null
-                      ? <span className="font-medium text-green-600">{prediction.powerplayGuess2} runs</span>
-                      : <span className="text-red-500">Not guessed yet</span>
-                    }
-                    <span className="text-gray-400">up to +{POINTS.POWERPLAY_EXACT}pts</span>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <button
-              onClick={() => navigate(`/party/${partyId}/predict`)}
-              className="btn-primary w-full text-sm py-2.5"
-            >
-              {prediction ? 'Update Predictions 🎯' : 'Make Predictions 🎯'}
-            </button>
-          </div>
-        )}
-
-        {/* My score */}
-        {myRank && (
-          <div className="card p-4 bg-ipl-orange-light border border-ipl-orange/20">
-            <div className="text-xs text-ipl-orange font-semibold mb-2">Your Standing</div>
-            <div className="flex items-center justify-between">
-              <div className="font-bold text-3xl text-ipl-orange">#{myRank.rank}</div>
+        {/* ── PARTY VIEW ── */}
+        {view === 'party' && (
+          <>
+            {/* Party info */}
+            <div className="card p-4 flex items-center justify-between">
+              <div>
+                <div className="text-xs text-gray-400 mb-1">Status</div>
+                <StatusBadge status={party.status} />
+              </div>
               <div className="text-right">
-                <div className="font-bold text-2xl">{myRank.totalPoints}</div>
-                <div className="text-xs text-gray-500">total pts</div>
+                <div className="text-xs text-gray-400 mb-1">Join Code</div>
+                <div className="font-mono font-bold text-ipl-orange tracking-widest">{party.joinCode}</div>
               </div>
             </div>
-            {/* Points breakdown */}
-            <div className="flex gap-3 mt-2 pt-2 border-t border-ipl-orange/20">
-              {[
-                { label: 'Toss', val: myRank.tossPoints },
-                { label: 'Match', val: myRank.matchPoints },
-                { label: 'PP', val: (myRank as any).powerplayPoints || 0 },
-                { label: 'Bonus', val: myRank.bonusPoints },
-              ].map(item => (
-                <div key={item.label} className="flex-1 text-center">
-                  <div className="text-sm font-bold text-ipl-orange">{item.val}</div>
-                  <div className="text-xs text-gray-400">{item.label}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
 
-        {/* Leaderboard */}
-        {leaderboard.length > 0 && (
-          <>
-            <div className="section-title">Leaderboard</div>
-            <div className="space-y-2">
-              {leaderboard.slice(0, 10).map(entry => (
-                <LBRow key={entry.userId} entry={entry} highlight={entry.userId === firebaseUser?.uid} />
-              ))}
-            </div>
+            {/* Match info */}
+            {match && (
+              <div className="card p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <TeamBadge team={match.team1} size="md" />
+                  <span className="text-gray-400 text-sm font-medium">vs</span>
+                  <TeamBadge team={match.team2} size="md" />
+                </div>
+                <div className="text-xs text-gray-500">{match.venue} · {match.city}</div>
+                <div className="text-xs text-gray-400 mt-0.5">{formatMatchDate(match.matchDate)} · {match.timeIST}</div>
+              </div>
+            )}
+
+            {/* Open predictions — TOP */}
+            {party.status === 'active' && anyOpen && (
+              <div className="card p-4 border-2 border-ipl-orange/30 bg-ipl-orange-light">
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                  <span className="text-sm font-semibold text-ipl-orange">Predictions Open!</span>
+                </div>
+                <div className="space-y-1.5 mb-3">
+                  {tossOpen && (
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-gray-600">🪙 Toss</span>
+                      <div className="flex items-center gap-1.5">
+                        {prediction?.tossWinner
+                          ? <span className="font-medium text-green-600">✓ {prediction.tossWinner}</span>
+                          : <span className="text-red-500">Not picked</span>}
+                        <span className="text-gray-400">+{POINTS.TOSS_CORRECT}pts</span>
+                      </div>
+                    </div>
+                  )}
+                  {matchOpen && (
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-gray-600">🏆 Match Winner</span>
+                      <div className="flex items-center gap-1.5">
+                        {prediction?.matchWinner
+                          ? <span className="font-medium text-green-600">✓ {prediction.matchWinner}</span>
+                          : <span className="text-red-500">Not picked</span>}
+                        <span className="text-gray-400">+{POINTS.MATCH_CORRECT}pts</span>
+                      </div>
+                    </div>
+                  )}
+                  {pp1Open && match && (
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-gray-600">⚡ {match.team1} PP</span>
+                      <div className="flex items-center gap-1.5">
+                        {prediction?.powerplayGuess1 != null
+                          ? <span className="font-medium text-green-600">✓ {prediction.powerplayGuess1} runs</span>
+                          : <span className="text-red-500">Not guessed</span>}
+                        <span className="text-gray-400">up to +{POINTS.POWERPLAY_EXACT}pts</span>
+                      </div>
+                    </div>
+                  )}
+                  {pp2Open && match && (
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-gray-600">⚡ {match.team2} PP</span>
+                      <div className="flex items-center gap-1.5">
+                        {prediction?.powerplayGuess2 != null
+                          ? <span className="font-medium text-green-600">✓ {prediction.powerplayGuess2} runs</span>
+                          : <span className="text-red-500">Not guessed</span>}
+                        <span className="text-gray-400">up to +{POINTS.POWERPLAY_EXACT}pts</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <button onClick={() => navigate(`/party/${partyId}/predict`)} className="btn-primary w-full text-sm py-2.5">
+                  {prediction ? 'Update Predictions 🎯' : 'Make Predictions 🎯'}
+                </button>
+              </div>
+            )}
+
+            {/* My score */}
+            {myRank && (
+              <div className="card p-4 bg-ipl-orange-light border border-ipl-orange/20">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="text-xs text-ipl-orange font-semibold">Your Standing</div>
+                  <button onClick={() => setView('leaderboard')} className="text-xs text-ipl-orange underline">
+                    Full leaderboard →
+                  </button>
+                </div>
+                <div className="flex items-center justify-between">
+                  <div className="font-bold text-3xl text-ipl-orange">{rankEmoji(myRank.rank)}</div>
+                  <div className="text-right">
+                    <div className="font-bold text-2xl">{myRank.totalPoints}</div>
+                    <div className="text-xs text-gray-500">total pts</div>
+                  </div>
+                </div>
+                <div className="flex gap-3 mt-2 pt-2 border-t border-ipl-orange/20">
+                  {[
+                    { label: 'Toss', val: myRank.tossPoints },
+                    { label: 'Match', val: myRank.matchPoints },
+                    { label: 'PP', val: (myRank as any).powerplayPoints || 0 },
+                    { label: 'Bonus', val: myRank.bonusPoints },
+                  ].map(item => (
+                    <div key={item.label} className="flex-1 text-center">
+                      <div className="text-sm font-bold text-ipl-orange">{item.val}</div>
+                      <div className="text-xs text-gray-400">{item.label}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Closed prediction results — BOTTOM */}
+            {closedPredictions.length > 0 && (
+              <>
+                <div className="section-title">Your Results</div>
+                <div className="card divide-y divide-gray-100">
+                  {closedPredictions.map((item, i) => (
+                    <div key={i} className="p-3 flex items-center justify-between">
+                      <div>
+                        <div className="text-xs font-semibold text-gray-600">{item.label}</div>
+                        <div className="text-xs text-gray-400 mt-0.5">
+                          Your pick: <span className="font-medium text-gray-700">{item.yourPick ?? '—'}</span>
+                          {item.actual && <> · Actual: <span className="font-medium text-gray-700">{item.actual}</span></>}
+                        </div>
+                      </div>
+                      <div className={`text-sm font-bold ${
+                        item.pts === null ? 'text-gray-300'
+                        : item.pts > 0 ? 'text-green-600'
+                        : 'text-red-400'
+                      }`}>
+                        {item.pts === null ? '—' : item.pts > 0 ? `+${item.pts}` : '0'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </>
         )}
 
-        {/* ── CLOSED PREDICTIONS — shown BELOW leaderboard ── */}
-        {closedPredictions.length > 0 && (
+        {/* ── LEADERBOARD VIEW ── */}
+        {view === 'leaderboard' && (
           <>
-            <div className="section-title">Your Results</div>
-            <div className="card divide-y divide-gray-100">
-              {closedPredictions.map((item, i) => (
-                <div key={i} className="p-3 flex items-center justify-between">
-                  <div>
-                    <div className="text-xs font-semibold text-gray-600">{item.label}</div>
-                    <div className="text-xs text-gray-400 mt-0.5">
-                      Your pick: <span className="font-medium text-gray-700">{item.yourPick ?? '—'}</span>
-                      {item.actual && <> · Actual: <span className="font-medium text-gray-700">{item.actual}</span></>}
-                    </div>
+            {/* My rank pinned at top */}
+            {myRank && (
+              <div className="card p-4 bg-ipl-orange-light border border-ipl-orange/20">
+                <div className="text-xs text-ipl-orange font-semibold mb-2">Your Position</div>
+                <div className="flex items-center gap-3">
+                  <div className="text-2xl">{rankEmoji(myRank.rank)}</div>
+                  <div className="flex-1">
+                    <div className="font-bold text-sm">{myRank.userName}</div>
+                    {myRank.favoriteTeam && <TeamBadge team={myRank.favoriteTeam} size="xs" />}
                   </div>
-                  <div className={`text-sm font-bold ${
-                    item.pts === null ? 'text-gray-300'
-                    : item.pts > 0 ? 'text-green-600'
-                    : 'text-red-400'
-                  }`}>
-                    {item.pts === null ? '—' : item.pts > 0 ? `+${item.pts}` : '0'}
+                  <div className="text-right">
+                    <div className="font-bold text-xl text-ipl-orange">{myRank.totalPoints}</div>
+                    <div className="text-xs text-gray-400">pts</div>
                   </div>
                 </div>
-              ))}
+              </div>
+            )}
+
+            {leaderboard.length === 0 ? (
+              <div className="text-center py-16">
+                <div className="text-5xl mb-3">📊</div>
+                <div className="font-semibold text-gray-600">No scores yet</div>
+                <div className="text-sm text-gray-400 mt-1">Leaderboard updates when results are set</div>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {leaderboard.map(entry => (
+                  <LBRow
+                    key={entry.userId}
+                    entry={entry}
+                    highlight={entry.userId === firebaseUser?.uid}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Points breakdown legend */}
+            <div className="card p-3 mt-2">
+              <div className="text-xs text-gray-400 text-center">T = Toss · M = Match · PP = Powerplay · B = Bonus</div>
             </div>
           </>
         )}
