@@ -288,9 +288,10 @@ export default function UserPartyPage() {
                 </div>
                 <div className="flex gap-3 mt-2 pt-2 border-t border-ipl-orange/20">
                   {[
-                    { label: 'Toss', val: myRank.tossPoints },
+                    { label: 'Toss',  val: myRank.tossPoints },
                     { label: 'Match', val: myRank.matchPoints },
-                    { label: 'PP', val: (myRank as any).powerplayPoints || 0 },
+                    { label: 'PP',    val: (myRank as any).powerplayPoints || 0 },
+                    { label: 'Overs', val: (myRank as any).overPoints || 0 },
                     { label: 'Bonus', val: myRank.bonusPoints },
                   ].map(item => (
                     <div key={item.label} className="flex-1 text-center">
@@ -372,7 +373,7 @@ export default function UserPartyPage() {
 
             {/* Points breakdown legend */}
             <div className="card p-3 mt-2">
-              <div className="text-xs text-gray-400 text-center">T = Toss · M = Match · PP = Powerplay · B = Bonus</div>
+              <div className="text-xs text-gray-400 text-center">T = Toss · M = Match · PP = Powerplay · Ov = Overs · B = Bonus</div>
             </div>
           </>
         )}

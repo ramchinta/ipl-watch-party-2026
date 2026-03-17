@@ -67,7 +67,8 @@ export const onMatchResultUpdated = functions.firestore
       }
 
       const bonusPoints = score.bonusPoints || 0
-      const totalPoints = tossPoints + matchPoints + powerplayPoints + bonusPoints
+      const overPoints = score.overPoints || 0
+      const totalPoints = tossPoints + matchPoints + powerplayPoints + overPoints + bonusPoints
 
       batch.update(scoreRef, {
         tossPoints, matchPoints, powerplayPoints, totalPoints,

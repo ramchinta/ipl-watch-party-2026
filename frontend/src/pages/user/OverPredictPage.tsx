@@ -97,8 +97,11 @@ export default function OverPredictPage() {
 
   if (!match) return <div className="min-h-screen flex items-center justify-center"><Spinner /></div>
 
+  // Normalize state — if undefined treat as future
+  const getState = (oq: OverQuestion) => (oq.state || 'future') as OverQuestion['state']
+
   const visibleOvers = overs.filter(
-    o => o.inning === inning && o.state !== 'future' && o.state !== 'skipped'
+    o => o.inning === inning && getState(o) !== 'skipped'
   )
   const openCount = visibleOvers.filter(o => o.state === 'open').length
 
@@ -167,9 +170,10 @@ export default function OverPredictPage() {
 
             return (
               <div key={key} className={`card p-4 border-2 transition-all ${
-                isDone  ? 'border-blue-200 bg-blue-50' :
-                isClosed? 'border-orange-200 bg-orange-50' :
-                isOpen  ? 'border-green-200 bg-green-50' : 'border-gray-200'
+                isDone    ? 'border-blue-200 bg-blue-50' :
+                isClosed  ? 'border-orange-200 bg-orange-50' :
+                isOpen    ? 'border-green-200 bg-green-50' :
+                            'border-gray-100 bg-gray-50 opacity-70'
               }`}>
                 {/* Header */}
                 <div className="flex items-center justify-between mb-3">
@@ -181,17 +185,18 @@ export default function OverPredictPage() {
                       </span>
                     )}
                     <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${
-                      isDone  ? 'bg-blue-100 text-blue-700' :
-                      isClosed? 'bg-orange-100 text-orange-700' :
-                      'bg-green-100 text-green-700'
+                      isDone    ? 'bg-blue-100 text-blue-700' :
+                      isClosed  ? 'bg-orange-100 text-orange-700' :
+                      isOpen    ? 'bg-green-100 text-green-700' :
+                                  'bg-gray-100 text-gray-400'
                     }`}>
-                      {isDone ? 'Done' : isClosed ? 'Locked' : 'Open'}
+                      {isDone ? 'Done' : isClosed ? 'Locked' : isOpen ? 'Open' : 'Will open soon'}
                     </span>
                   </div>
                 </div>
 
-                {/* Input grid */}
-                <div className="grid grid-cols-4 gap-2 mb-3">
+                {/* Input grid — only show for non-future overs */}
+                {(isOpen || isClosed || isDone) && <div className="grid grid-cols-4 gap-2 mb-3">
                   {[
                     { field: 'runs',    label: 'Runs',  max: 36, actual: oq.actualRuns,    pts: saved?.pointsRuns },
                     { field: 'wickets', label: 'Wkts',  max: 4,  actual: oq.actualWickets, pts: saved?.pointsWickets },
@@ -233,7 +238,7 @@ export default function OverPredictPage() {
                       )}
                     </div>
                   ))}
-                </div>
+                </div>}
 
                 {isOpen && (
                   <button
@@ -251,6 +256,11 @@ export default function OverPredictPage() {
                 {isClosed && (
                   <p className="text-xs text-center text-orange-500 bg-orange-50 rounded-xl py-1.5">
                     🔒 Locked — waiting for result
+                  </p>
+                )}
+                {!isOpen && !isClosed && !isDone && (
+                  <p className="text-xs text-center text-gray-400 bg-gray-50 rounded-xl py-2">
+                    🕐 Will open soon — check back during the match
                   </p>
                 )}
               </div>
