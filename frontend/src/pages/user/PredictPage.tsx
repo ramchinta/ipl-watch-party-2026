@@ -60,7 +60,7 @@ export default function PredictPage() {
         matchWinner ?? undefined
       )
       toast.success('Predictions saved! 🎯')
-      navigate(-1)
+      navigate('/home')
     } catch (e: any) {
       toast.error(e.message || 'Failed to save')
     } finally {
@@ -79,7 +79,7 @@ export default function PredictPage() {
       <PageHeader
         title="Make Predictions"
         subtitle={`${match.team1} vs ${match.team2}`}
-        onBack={() => navigate(-1)}
+        onBack={() => navigate('/home')}
       />
 
       <div className="max-w-sm mx-auto px-4 py-5 space-y-5">
