@@ -22,10 +22,11 @@ export const onMatchResultUpdated = functions.firestore
     const after = change.after.data()
     const matchId = context.params.matchId
 
-    const tossJustSet = !before.tossWinner && after.tossWinner
+    const tossJustSet  = !before.tossWinner && after.tossWinner
     const resultJustSet = !before.result && after.result
-    const pp1JustSet = before.powerplay?.team1Score === undefined && after.powerplay?.team1Score !== undefined
-    const pp2JustSet = before.powerplay?.team2Score === undefined && after.powerplay?.team2Score !== undefined
+    // Use QState: completed means score is set
+    const pp1JustSet = before.powerplay?.team1State !== 'completed' && after.powerplay?.team1State === 'completed' && after.powerplay?.team1Score !== undefined
+    const pp2JustSet = before.powerplay?.team2State !== 'completed' && after.powerplay?.team2State === 'completed' && after.powerplay?.team2Score !== undefined
 
     if (!tossJustSet && !resultJustSet && !pp1JustSet && !pp2JustSet) return null
 

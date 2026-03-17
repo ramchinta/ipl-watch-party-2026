@@ -36,11 +36,19 @@ export type MatchStatus =
   | 'upcoming' | 'toss_open' | 'toss_closed'
   | 'match_open' | 'match_closed' | 'live' | 'completed'
 
+// Question state — used for toss, match, and powerplay windows
+// future    = default, not started, hidden from users
+// open      = accepting predictions
+// closed    = locked, waiting for result (not yet entered)
+// skipped   = admin marked as won't happen — never shown to users
+// completed = result entered, points scored
+export type QState = 'future' | 'open' | 'closed' | 'skipped' | 'completed'
+
 export interface PowerplayScores {
-  team1Score?: number   // actual powerplay score for team1 (set by admin)
-  team2Score?: number   // actual powerplay score for team2
-  team1Open: boolean    // can users still guess team1 powerplay?
-  team2Open: boolean    // can users still guess team2 powerplay?
+  team1Score?: number
+  team2Score?: number
+  team1State: QState
+  team2State: QState
 }
 
 export interface Match {
@@ -54,8 +62,8 @@ export interface Match {
   timeIST: string
   status: MatchStatus
   tossWinner?: IPLTeam
-  tossPredictionOpen: boolean
-  matchPredictionOpen: boolean
+  tossState: QState
+  matchState: QState
   powerplay?: PowerplayScores
   result?: {
     winner: IPLTeam

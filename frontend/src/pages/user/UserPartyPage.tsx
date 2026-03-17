@@ -56,15 +56,20 @@ export default function UserPartyPage() {
   const myRank = leaderboard.find(e => e.userId === firebaseUser?.uid)
   const pp = match?.powerplay
 
-  const tossOpen = match?.tossPredictionOpen
-  const matchOpen = match?.matchPredictionOpen
-  const pp1Open = pp?.team1Open
-  const pp2Open = pp?.team2Open
-  const anyOpen = tossOpen || matchOpen || pp1Open || pp2Open
+  const ts   = ((match as any)?.tossState  || 'future')
+  const ms   = ((match as any)?.matchState || 'future')
+  const pp1s = pp ? ((pp as any).team1State || 'future') : null
+  const pp2s = pp ? ((pp as any).team2State || 'future') : null
 
-  // Closed predictions for results section — only show if result is actually in
-  const closedPredictions = []
-  if (match && !tossOpen && match.tossWinner) {
+  const tossOpen  = ts  === 'open'
+  const matchOpen = ms  === 'open'
+  const pp1Open   = pp1s === 'open'
+  const pp2Open   = pp2s === 'open'
+  const anyOpen   = tossOpen || matchOpen || pp1Open || pp2Open
+
+  // Results section — only show questions that are 'completed'
+  const closedPredictions: any[] = []
+  if (match && ts === 'completed' && match.tossWinner) {
     closedPredictions.push({
       label: 'Toss Prediction',
       yourPick: prediction?.tossWinner,
@@ -73,7 +78,7 @@ export default function UserPartyPage() {
         ? (prediction.tossWinner === match.tossWinner ? POINTS.TOSS_CORRECT : 0) : null,
     })
   }
-  if (match && !matchOpen && match.result) {
+  if (match && ms === 'completed' && match.result) {
     closedPredictions.push({
       label: 'Match Winner',
       yourPick: prediction?.matchWinner,
@@ -82,19 +87,19 @@ export default function UserPartyPage() {
         ? (prediction.matchWinner === match.result.winner ? POINTS.MATCH_CORRECT : 0) : null,
     })
   }
-  if (pp && !pp1Open && pp.team1Score != null && match) {
+  if (pp && pp1s === 'completed' && pp.team1Score != null && match) {
     closedPredictions.push({
       label: `${match.team1} Powerplay`,
       yourPick: prediction?.powerplayGuess1 != null ? `${prediction.powerplayGuess1} runs` : undefined,
-      actual: pp.team1Score != null ? `${pp.team1Score} runs` : undefined,
+      actual: `${pp.team1Score} runs`,
       pts: prediction?.powerplayPoints1 ?? null,
     })
   }
-  if (pp && !pp2Open && pp.team2Score != null && match) {
+  if (pp && pp2s === 'completed' && pp.team2Score != null && match) {
     closedPredictions.push({
       label: `${match.team2} Powerplay`,
       yourPick: prediction?.powerplayGuess2 != null ? `${prediction.powerplayGuess2} runs` : undefined,
-      actual: pp.team2Score != null ? `${pp.team2Score} runs` : undefined,
+      actual: `${pp.team2Score} runs`,
       pts: prediction?.powerplayPoints2 ?? null,
     })
   }
