@@ -62,9 +62,9 @@ export default function UserPartyPage() {
   const pp2Open = pp?.team2Open
   const anyOpen = tossOpen || matchOpen || pp1Open || pp2Open
 
-  // Closed predictions for results section
+  // Closed predictions for results section — only show if result is actually in
   const closedPredictions = []
-  if (match && !tossOpen) {
+  if (match && !tossOpen && match.tossWinner) {
     closedPredictions.push({
       label: 'Toss Prediction',
       yourPick: prediction?.tossWinner,
@@ -73,7 +73,7 @@ export default function UserPartyPage() {
         ? (prediction.tossWinner === match.tossWinner ? POINTS.TOSS_CORRECT : 0) : null,
     })
   }
-  if (match && !matchOpen) {
+  if (match && !matchOpen && match.result) {
     closedPredictions.push({
       label: 'Match Winner',
       yourPick: prediction?.matchWinner,
@@ -82,7 +82,7 @@ export default function UserPartyPage() {
         ? (prediction.matchWinner === match.result.winner ? POINTS.MATCH_CORRECT : 0) : null,
     })
   }
-  if (pp && !pp1Open && match) {
+  if (pp && !pp1Open && pp.team1Score != null && match) {
     closedPredictions.push({
       label: `${match.team1} Powerplay`,
       yourPick: prediction?.powerplayGuess1 != null ? `${prediction.powerplayGuess1} runs` : undefined,
@@ -90,7 +90,7 @@ export default function UserPartyPage() {
       pts: prediction?.powerplayPoints1 ?? null,
     })
   }
-  if (pp && !pp2Open && match) {
+  if (pp && !pp2Open && pp.team2Score != null && match) {
     closedPredictions.push({
       label: `${match.team2} Powerplay`,
       yourPick: prediction?.powerplayGuess2 != null ? `${prediction.powerplayGuess2} runs` : undefined,

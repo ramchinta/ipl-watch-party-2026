@@ -85,22 +85,29 @@ export default function PredictPage() {
   const pp = match.powerplay
   const teams: IPLTeam[] = [match.team1, match.team2]
 
-  // Determine state of each question
-  const tossState = match.tossPredictionOpen ? 'open'
-    : match.tossWinner ? 'closed' : 'future'
-  const matchState = match.matchPredictionOpen ? 'open'
-    : match.result ? 'closed' : 'future'
-  const pp1State = !pp ? 'future'
+  // QState: open=window open, waiting=closed no result yet, future=not started, closed=result in
+  type QState = 'open' | 'waiting' | 'future' | 'closed'
+
+  const tossState: QState = match.tossPredictionOpen ? 'open'
+    : match.tossWinner ? 'closed'
+    : match.status === 'upcoming' ? 'future' : 'waiting'
+
+  const matchState: QState = match.matchPredictionOpen ? 'open'
+    : match.result ? 'closed'
+    : match.status === 'upcoming' ? 'future' : 'waiting'
+
+  const pp1State: QState = !pp ? 'future'
     : pp.team1Open ? 'open'
-    : pp.team1Score != null ? 'closed' : 'future'
-  const pp2State = !pp ? 'future'
+    : pp.team1Score != null ? 'closed' : 'waiting'
+
+  const pp2State: QState = !pp ? 'future'
     : pp.team2Open ? 'open'
-    : pp.team2Score != null ? 'closed' : 'future'
+    : pp.team2Score != null ? 'closed' : 'waiting'
 
-  // Sort: open first, then future, then closed
-  const stateOrder = { open: 0, future: 1, closed: 2 }
+  // Sort: open → waiting → future → closed
+  const stateOrder: Record<QState, number> = { open: 0, waiting: 1, future: 2, closed: 3 }
 
-  const questions: { id: string; state: 'open' | 'future' | 'closed'; order: number }[] = [
+  const questions: { id: string; state: QState; order: number }[] = [
     { id: 'toss',  state: tossState,  order: 1 },
     { id: 'match', state: matchState, order: 2 },
     { id: 'pp1',   state: pp1State,   order: 3 },
@@ -114,7 +121,7 @@ export default function PredictPage() {
   const pp2Points = pp2Guess !== '' && pp?.team2Score != null
     ? calcPowerplayPoints(parseInt(pp2Guess), pp.team2Score) : null
 
-  function StateLabel({ state }: { state: 'open' | 'future' | 'closed' }) {
+  function StateLabel({ state }: { state: QState }) {
     if (state === 'open') return (
       <div className="flex items-center gap-1.5">
         <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
@@ -124,24 +131,46 @@ export default function PredictPage() {
     if (state === 'future') return (
       <span className="text-xs text-gray-400 font-medium bg-gray-100 px-2 py-0.5 rounded-full">Coming up</span>
     )
+    if (state === 'waiting') return (
+      <div className="flex items-center gap-1.5">
+        <div className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
+        <span className="text-xs text-orange-500 font-medium">Locked — awaiting result</span>
+      </div>
+    )
     return (
-      <span className="text-xs text-gray-400 font-medium bg-gray-100 px-2 py-0.5 rounded-full">Closed</span>
+      <span className="text-xs text-gray-500 font-medium bg-gray-100 px-2 py-0.5 rounded-full">Result in</span>
     )
   }
 
   function TossCard() {
-    const closed = tossState === 'closed'
-    const future = tossState === 'future'
+    const isFuture  = tossState === 'future'
+    const isOpen    = tossState === 'open'
+    const isWaiting = tossState === 'waiting'
+    const isClosed  = tossState === 'closed'
+    const locked = isWaiting || isClosed
     return (
-      <div className={`card p-4 ${closed ? 'opacity-75' : ''}`}>
+      <div className={`card p-4 ${isClosed ? 'opacity-80' : ''}`}>
         <div className="flex items-center justify-between mb-2">
           <div className="font-semibold text-sm">🪙 Who wins the toss?</div>
           <StateLabel state={tossState} />
         </div>
         <div className="text-xs text-gray-400 mb-3">+{POINTS.TOSS_CORRECT} pts if correct</div>
-        {future ? (
+        {isFuture ? (
           <div className="text-xs text-center text-gray-400 py-3 bg-gray-50 rounded-xl">
             Window not open yet — host will open before the toss
+          </div>
+        ) : isWaiting ? (
+          <div className="space-y-2">
+            {teams.map(team => (
+              <PredCard key={team} team={team}
+                selected={tossWinner === team}
+                disabled={true}
+                points={POINTS.TOSS_CORRECT}
+                onClick={() => {}} />
+            ))}
+            <p className="text-xs text-center text-orange-500 mt-1 bg-orange-50 rounded-xl py-2">
+              🔒 Your pick is locked — waiting for toss result
+            </p>
           </div>
         ) : (
           <>
@@ -149,12 +178,12 @@ export default function PredictPage() {
               {teams.map(team => (
                 <PredCard key={team} team={team}
                   selected={tossWinner === team}
-                  disabled={closed}
+                  disabled={locked}
                   points={POINTS.TOSS_CORRECT}
-                  onClick={() => !closed && setTossWinner(tossWinner === team ? null : team)} />
+                  onClick={() => isOpen && setTossWinner(tossWinner === team ? null : team)} />
               ))}
             </div>
-            {closed && match.tossWinner && (
+            {isClosed && match.tossWinner && (
               <div className="mt-2 text-xs text-center">
                 Toss won by <strong>{match.tossWinner}</strong>
                 {tossWinner && (
@@ -171,18 +200,34 @@ export default function PredictPage() {
   }
 
   function MatchCard() {
-    const closed = matchState === 'closed'
-    const future = matchState === 'future'
+    const isFuture  = matchState === 'future'
+    const isOpen    = matchState === 'open'
+    const isWaiting = matchState === 'waiting'
+    const isClosed  = matchState === 'closed'
+    const locked = isWaiting || isClosed
     return (
-      <div className={`card p-4 ${closed ? 'opacity-75' : ''}`}>
+      <div className={`card p-4 ${isClosed ? 'opacity-80' : ''}`}>
         <div className="flex items-center justify-between mb-2">
           <div className="font-semibold text-sm">🏆 Who wins the match?</div>
           <StateLabel state={matchState} />
         </div>
         <div className="text-xs text-gray-400 mb-3">+{POINTS.MATCH_CORRECT} pts if correct</div>
-        {future ? (
+        {isFuture ? (
           <div className="text-xs text-center text-gray-400 py-3 bg-gray-50 rounded-xl">
             Window not open yet — host will open before the first ball
+          </div>
+        ) : isWaiting ? (
+          <div className="space-y-2">
+            {teams.map(team => (
+              <PredCard key={team} team={team}
+                selected={matchWinner === team}
+                disabled={true}
+                points={POINTS.MATCH_CORRECT}
+                onClick={() => {}} />
+            ))}
+            <p className="text-xs text-center text-orange-500 mt-1 bg-orange-50 rounded-xl py-2">
+              🔒 Your pick is locked — waiting for match result
+            </p>
           </div>
         ) : (
           <>
@@ -190,12 +235,12 @@ export default function PredictPage() {
               {teams.map(team => (
                 <PredCard key={team} team={team}
                   selected={matchWinner === team}
-                  disabled={closed}
+                  disabled={locked}
                   points={POINTS.MATCH_CORRECT}
-                  onClick={() => !closed && setMatchWinner(matchWinner === team ? null : team)} />
+                  onClick={() => isOpen && setMatchWinner(matchWinner === team ? null : team)} />
               ))}
             </div>
-            {closed && match.result?.winner && (
+            {isClosed && match.result?.winner && (
               <div className="mt-2 text-xs text-center">
                 Won by <strong>{match.result.winner}</strong>
                 {matchWinner && (
@@ -212,16 +257,26 @@ export default function PredictPage() {
   }
 
   function PowerplayCard({ team, teamNum }: { team: IPLTeam; teamNum: 1 | 2 }) {
-    const state = teamNum === 1 ? pp1State : pp2State
-    const guess = teamNum === 1 ? pp1Guess : pp2Guess
-    const setGuess = teamNum === 1 ? setPp1Guess : setPp2Guess
+    const state      = teamNum === 1 ? pp1State : pp2State
+    const guess      = teamNum === 1 ? pp1Guess : pp2Guess
+    const setGuess   = teamNum === 1 ? setPp1Guess : setPp2Guess
     const actualScore = teamNum === 1 ? pp?.team1Score : pp?.team2Score
-    const pts = teamNum === 1 ? pp1Points : pp2Points
-    const closed = state === 'closed'
-    const future = state === 'future'
+    const pts        = teamNum === 1 ? pp1Points : pp2Points
+    const isFuture   = state === 'future'
+    const isOpen     = state === 'open'
+    const isWaiting  = state === 'waiting'
+    const isClosed   = state === 'closed'
+
+    const pointsScale = [
+      { label: 'Exact', pts: POINTS.POWERPLAY_EXACT },
+      { label: '±1', pts: POINTS.POWERPLAY_CLOSE_1 },
+      { label: '±3', pts: POINTS.POWERPLAY_CLOSE_3 },
+      { label: '±5', pts: POINTS.POWERPLAY_CLOSE_5 },
+      { label: '±8', pts: POINTS.POWERPLAY_CLOSE_8 },
+    ]
 
     return (
-      <div className={`card p-4 ${closed ? 'opacity-75' : ''}`}>
+      <div className={`card p-4 ${isClosed ? 'opacity-80' : ''}`}>
         <div className="flex items-center justify-between mb-2">
           <div className="font-semibold text-sm flex items-center gap-1.5">
             ⚡ <TeamBadge team={team} size="xs" /> Powerplay
@@ -230,31 +285,48 @@ export default function PredictPage() {
         </div>
         <div className="text-xs text-gray-400 mb-3">Guess 6-over score · up to +{POINTS.POWERPLAY_EXACT} pts</div>
 
-        {future ? (
+        {isFuture ? (
           <div className="text-xs text-center text-gray-400 py-3 bg-gray-50 rounded-xl">
             Window not open yet — admin will open before the powerplay starts
           </div>
-        ) : (
+        ) : isWaiting ? (
           <>
-            {/* Points scale */}
             <div className="flex gap-1 mb-3 flex-wrap">
-              {[
-                { label: 'Exact', pts: POINTS.POWERPLAY_EXACT },
-                { label: '±1', pts: POINTS.POWERPLAY_CLOSE_1 },
-                { label: '±3', pts: POINTS.POWERPLAY_CLOSE_3 },
-                { label: '±5', pts: POINTS.POWERPLAY_CLOSE_5 },
-                { label: '±8', pts: POINTS.POWERPLAY_CLOSE_8 },
-              ].map(s => (
+              {pointsScale.map(s => (
                 <div key={s.label} className="flex items-center gap-1 bg-gray-50 rounded-lg px-2 py-1">
                   <span className="text-xs text-gray-400">{s.label}</span>
                   <span className="text-xs font-bold text-ipl-orange">+{s.pts}</span>
                 </div>
               ))}
             </div>
-
             <div className="flex items-center gap-3">
               <input type="number" min="0" max="120"
-                disabled={closed}
+                disabled={true}
+                value={guess}
+                placeholder="—"
+                className="input-field flex-1 text-center text-2xl font-bold opacity-50 cursor-not-allowed"
+              />
+              <div className="text-right min-w-[48px]">
+                <div className="text-xs text-gray-400">runs</div>
+              </div>
+            </div>
+            <p className="text-xs text-center text-orange-500 mt-2 bg-orange-50 rounded-xl py-2">
+              🔒 Your guess is locked — waiting for actual score
+            </p>
+          </>
+        ) : (
+          <>
+            <div className="flex gap-1 mb-3 flex-wrap">
+              {pointsScale.map(s => (
+                <div key={s.label} className="flex items-center gap-1 bg-gray-50 rounded-lg px-2 py-1">
+                  <span className="text-xs text-gray-400">{s.label}</span>
+                  <span className="text-xs font-bold text-ipl-orange">+{s.pts}</span>
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center gap-3">
+              <input type="number" min="0" max="120"
+                disabled={isClosed}
                 value={guess}
                 onChange={e => setGuess(e.target.value)}
                 placeholder="e.g. 52"
@@ -265,8 +337,7 @@ export default function PredictPage() {
                 {pts !== null && <div className="text-lg font-bold text-green-600">+{pts}</div>}
               </div>
             </div>
-
-            {closed && actualScore != null && (
+            {isClosed && actualScore != null && (
               <div className="text-xs text-center mt-2">
                 Actual: <strong>{actualScore} runs</strong>
                 {guess !== '' && (
@@ -302,15 +373,22 @@ export default function PredictPage() {
             if (q.state !== lastState) {
               if (q.state === 'open') {
                 rendered.push(
-                  <div key={`label-open`} className="section-title flex items-center gap-2">
+                  <div key="label-open" className="section-title flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                     Open Now
                   </div>
                 )
+              } else if (q.state === 'waiting') {
+                rendered.push(
+                  <div key="label-waiting" className="section-title flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
+                    Locked — Awaiting Result
+                  </div>
+                )
               } else if (q.state === 'future') {
-                rendered.push(<div key={`label-future`} className="section-title">Coming Up</div>)
+                rendered.push(<div key="label-future" className="section-title">Coming Up</div>)
               } else {
-                rendered.push(<div key={`label-closed`} className="section-title">Closed</div>)
+                rendered.push(<div key="label-result" className="section-title">Results In</div>)
               }
               lastState = q.state
             }
