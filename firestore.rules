@@ -14,7 +14,7 @@ service cloud.firestore {
     }
     match /matches/{matchId} {
       allow read: if isAuthenticated();
-      allow write: if isAdmin();
+      allow write: if isAdmin() || isHost();
     }
     match /watchParties/{partyId} {
       allow read: if isAuthenticated();
@@ -36,7 +36,7 @@ service cloud.firestore {
     match /scores/{scoreId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow update: if isAdmin() || isHost() || (isAuthenticated() && resource.data.userId == request.auth.uid);
     }
     match /leaderboards/{partyId} {
       allow read: if isAuthenticated();
