@@ -4,41 +4,110 @@
       "collectionGroup": "predictions",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "partyId", "order": "ASCENDING" },
-        { "fieldPath": "matchId", "order": "ASCENDING" },
-        { "fieldPath": "userId", "order": "ASCENDING" }
+        {
+          "fieldPath": "partyId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "matchId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "userId",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "predictions",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "partyId", "order": "ASCENDING" },
-        { "fieldPath": "matchId", "order": "ASCENDING" }
+        {
+          "fieldPath": "partyId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "matchId",
+          "order": "ASCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "watchParties",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "hostId", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
+        {
+          "fieldPath": "hostId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "scores",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "partyId", "order": "ASCENDING" },
-        { "fieldPath": "totalPoints", "order": "DESCENDING" }
+        {
+          "fieldPath": "partyId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "totalPoints",
+          "order": "DESCENDING"
+        }
       ]
     },
     {
       "collectionGroup": "matches",
       "queryScope": "COLLECTION",
       "fields": [
-        { "fieldPath": "status", "order": "ASCENDING" },
-        { "fieldPath": "matchDate", "order": "ASCENDING" }
+        {
+          "fieldPath": "status",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "matchDate",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "overQuestions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "matchId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "inning",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "overNumber",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "overGuesses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "matchId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "inning",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "overNumber",
+          "order": "ASCENDING"
+        }
       ]
     }
   ],

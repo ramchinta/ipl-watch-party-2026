@@ -27,6 +27,8 @@ import AdminDashboard from './pages/admin/AdminDashboard'
 import AdminFixtures from './pages/admin/AdminFixtures'
 import AdminMatchDetail from './pages/admin/AdminMatchDetail'
 import AdminParties from './pages/admin/AdminParties'
+import AdminOverQuestions from './pages/admin/AdminOverQuestions'
+import OverPredictPage from './pages/user/OverPredictPage'
 
 function RequireAuth({ children, role }: { children: JSX.Element; role?: string }) {
   const { firebaseUser, appUser, loading } = useAuth()
@@ -66,6 +68,7 @@ export default function App() {
         <Route path="/home" element={<RequireAuth><UserHome /></RequireAuth>} />
         <Route path="/party/:partyId" element={<RequireAuth><UserPartyPage /></RequireAuth>} />
         <Route path="/party/:partyId/predict" element={<RequireAuth><PredictPage /></RequireAuth>} />
+        <Route path="/party/:partyId/overs" element={<RequireAuth><OverPredictPage /></RequireAuth>} />
 
         {/* Host */}
         <Route path="/host" element={<RequireAuth role="host"><HostDashboard /></RequireAuth>} />
@@ -79,6 +82,7 @@ export default function App() {
         <Route path="/admin" element={<RequireAuth role="admin"><AdminDashboard /></RequireAuth>} />
         <Route path="/admin/fixtures" element={<RequireAuth role="admin"><AdminFixtures /></RequireAuth>} />
         <Route path="/admin/fixtures/:matchId" element={<RequireAuth role="admin"><AdminMatchDetail /></RequireAuth>} />
+        <Route path="/admin/fixtures/:matchId/overs" element={<RequireAuth role="admin"><AdminOverQuestions /></RequireAuth>} />
         <Route path="/admin/parties" element={<RequireAuth role="admin"><AdminParties /></RequireAuth>} />
 
         {/* Leaderboard public display (for TV casting) */}

@@ -364,6 +364,19 @@ export default function AdminMatchDetail() {
             </div>
           </>
         )}
+      {/* Link to over questions */}
+        <button
+          onClick={() => navigate(`/admin/fixtures/${match.id}/overs`)}
+          className="w-full card p-4 flex items-center gap-3 hover:shadow-md transition-shadow"
+        >
+          <div className="w-10 h-10 bg-ipl-blue/10 rounded-xl flex items-center justify-center text-xl">🏏</div>
+          <div className="text-left">
+            <div className="text-sm font-semibold">Over-by-Over Questions</div>
+            <div className="text-xs text-gray-400">Manage 40 over questions (runs, wkts, 4s, 6s)</div>
+          </div>
+          <span className="ml-auto text-gray-400">→</span>
+        </button>
+
       </div>
     </div>
   )

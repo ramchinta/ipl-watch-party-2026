@@ -5,6 +5,8 @@ import { subscribeToParty, joinParty } from '../../services/partyService'
 import { subscribeToMatch } from '../../services/matchService'
 import { subscribeToLeaderboard } from '../../services/scoreService'
 import { subscribeToUserPrediction } from '../../services/predictionService'
+import { subscribeToMatchOvers } from '../../services/overService'
+import type { OverQuestion } from '../../types'
 import type { WatchParty, Match, LeaderboardEntry, Prediction } from '../../types'
 import { POINTS } from '../../types'
 import { PageHeader, StatusBadge, TeamBadge, LBRow, Spinner } from '../../components/shared'
@@ -23,6 +25,7 @@ export default function UserPartyPage() {
   const [prediction, setPrediction] = useState<Prediction | null>(null)
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<View>('party')
+  const [overs, setOvers] = useState<OverQuestion[]>([])
 
   useEffect(() => {
     if (!partyId) return
@@ -34,7 +37,8 @@ export default function UserPartyPage() {
   useEffect(() => {
     if (!party?.matchId) return
     const u2 = subscribeToMatch(party.matchId, setMatch)
-    return () => u2()
+    const u5 = subscribeToMatchOvers(party.matchId, setOvers)
+    return () => { u2(); u5() }
   }, [party?.matchId])
 
   useEffect(() => {
@@ -244,6 +248,26 @@ export default function UserPartyPage() {
                   {prediction ? 'Update Predictions 🎯' : 'Make Predictions 🎯'}
                 </button>
               </div>
+            )}
+
+            {/* Over-by-over guesses link */}
+            {overs.some(o => o.state === 'open') && (
+              <button
+                onClick={() => navigate(`/party/${partyId}/overs`)}
+                className="w-full card p-4 flex items-center gap-3 border-2 border-blue-200 bg-blue-50 hover:shadow-md transition-shadow"
+              >
+                <div className="w-10 h-10 bg-ipl-blue/10 rounded-xl flex items-center justify-center text-xl">🏏</div>
+                <div className="text-left flex-1">
+                  <div className="text-sm font-semibold text-ipl-blue">Over-by-Over Guesses</div>
+                  <div className="text-xs text-gray-400">
+                    {overs.filter(o => o.state === 'open').length} over{overs.filter(o => o.state === 'open').length !== 1 ? 's' : ''} open now
+                  </div>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                  <span className="text-sm text-gray-400">→</span>
+                </div>
+              </button>
             )}
 
             {/* My score */}

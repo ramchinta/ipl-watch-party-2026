@@ -44,6 +44,57 @@ export type MatchStatus =
 // completed = result entered, points scored
 export type QState = 'future' | 'open' | 'closed' | 'skipped' | 'completed'
 
+// ── Over Questions ────────────────────────────────────────────────────────────
+export type Inning = 1 | 2
+
+export interface OverQuestion {
+  id: string          // e.g. "matchId_inn1_over3"
+  matchId: string
+  inning: Inning
+  overNumber: number  // 1-20
+  state: QState
+  // Actual results (set by admin when completed)
+  actualRuns?: number
+  actualWickets?: number
+  actualFours?: number
+  actualSixes?: number
+  createdAt?: any
+  updatedAt?: any
+}
+
+export interface OverGuess {
+  id: string          // e.g. "matchId_inn1_over3_userId"
+  matchId: string
+  partyId: string
+  userId: string
+  inning: Inning
+  overNumber: number
+  guessRuns?: number
+  guessWickets?: number
+  guessFours?: number
+  guessSixes?: number
+  // Points awarded (set when admin enters result)
+  pointsRuns?: number
+  pointsWickets?: number
+  pointsFours?: number
+  pointsSixes?: number
+  totalPoints?: number
+  submittedAt?: any
+}
+
+export function calcRunsPoints(guess: number, actual: number): number {
+  const d = Math.abs(guess - actual)
+  if (d === 0) return 10
+  if (d <= 1)  return 7
+  if (d <= 3)  return 5
+  if (d <= 5)  return 3
+  if (d <= 8)  return 1
+  return 0
+}
+export function calcExactPoints(guess: number, actual: number, pts = 5): number {
+  return guess === actual ? pts : 0
+}
+
 export interface PowerplayScores {
   team1Score?: number
   team2Score?: number
