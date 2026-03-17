@@ -4,8 +4,10 @@ import { useAuth } from '../../context/AuthContext'
 import { getPartyByCode, joinParty } from '../../services/partyService'
 import { db } from '../../services/firebase'
 import { doc, getDoc, updateDoc } from 'firebase/firestore'
-import type { WatchParty } from '../../types'
+import type { WatchParty, IPLTeam } from '../../types'
+import { IPL_TEAMS } from '../../types'
 import { StatusBadge, Spinner } from '../../components/shared'
+import { cn } from '../../utils/helpers'
 import toast from 'react-hot-toast'
 
 type Tab = 'home' | 'past' | 'rules' | 'account'
@@ -20,12 +22,14 @@ export default function UserHome() {
   const [loading, setLoading] = useState(true)
   const [editName, setEditName] = useState('')
   const [editFood, setEditFood] = useState('')
+  const [editTeam, setEditTeam] = useState<IPLTeam | ''>('')
   const [savingAccount, setSavingAccount] = useState(false)
 
   useEffect(() => {
     if (!appUser) return
     setEditName(appUser.name || '')
     setEditFood((appUser as any).food || '')
+    setEditTeam(appUser.favoriteTeam || '')
     const ids: string[] = appUser.joinedParties || []
     if (ids.length === 0) { setLoading(false); return }
     Promise.all(
@@ -63,6 +67,7 @@ export default function UserHome() {
       await updateDoc(doc(db, 'users', firebaseUser!.uid), {
         name: editName.trim(),
         food: editFood.trim() || null,
+        favoriteTeam: editTeam || null,
       })
       toast.success('Profile updated!')
     } catch (e: any) { toast.error(e.message || 'Failed to save') }
@@ -96,6 +101,7 @@ export default function UserHome() {
       <div className="flex-1 overflow-auto pb-24">
         <div className="max-w-sm mx-auto px-4 py-5">
 
+          {/* HOME */}
           {tab === 'home' && (
             <>
               {loading ? <Spinner /> : activeParties.length > 0 ? (
@@ -127,7 +133,9 @@ export default function UserHome() {
                     maxLength={6} onKeyDown={e => e.key === 'Enter' && handleJoin()} />
                   <button onClick={handleJoin} disabled={joining || code.length < 4}
                     className="btn-primary px-5 py-3 text-sm whitespace-nowrap">
-                    {joining ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : 'Join'}
+                    {joining
+                      ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      : 'Join'}
                   </button>
                 </div>
               </div>
@@ -141,6 +149,7 @@ export default function UserHome() {
             </>
           )}
 
+          {/* PAST */}
           {tab === 'past' && (
             <>
               <div className="section-title">Past Watch Parties</div>
@@ -168,39 +177,134 @@ export default function UserHome() {
             </>
           )}
 
+          {/* RULES */}
           {tab === 'rules' && (
             <>
-              <div className="section-title">How Points Are Scored</div>
-              <div className="space-y-3 mb-6">
-                {[
-                  { icon: '🪙', title: 'Correct Toss Prediction', sub: 'Pick who wins the toss before it happens', pts: '+10', color: 'bg-yellow-100' },
-                  { icon: '🏆', title: 'Correct Match Winner', sub: 'Pick the winning team before the first ball', pts: '+20', color: 'bg-green-100' },
-                  { icon: '🎮', title: 'Host Bonus Points', sub: 'Awarded by host for mini-games at the party', pts: '+varies', color: 'bg-blue-100' },
-                  { icon: '❌', title: 'Host Deduction', sub: 'Deducted by host for penalties', pts: '-varies', color: 'bg-red-100' },
-                ].map(item => (
-                  <div key={item.title} className="card p-4 flex items-center gap-4">
-                    <div className={`w-12 h-12 ${item.color} rounded-2xl flex items-center justify-center text-2xl flex-shrink-0`}>{item.icon}</div>
-                    <div className="flex-1">
-                      <div className="font-semibold text-sm">{item.title}</div>
-                      <div className="text-xs text-gray-500 mt-0.5">{item.sub}</div>
-                    </div>
-                    <div className={`text-xl font-bold ${item.pts.startsWith('+') ? 'text-ipl-orange' : 'text-red-500'}`}>{item.pts}</div>
+              {/* Total points summary */}
+              <div className="card p-4 mb-4 bg-ipl-blue text-white">
+                <div className="text-sm font-semibold mb-3">Maximum Points Per Match</div>
+                <div className="grid grid-cols-3 gap-3 text-center">
+                  <div>
+                    <div className="text-2xl font-bold text-ipl-gold">10</div>
+                    <div className="text-xs text-white/70 mt-0.5">Toss</div>
                   </div>
-                ))}
+                  <div>
+                    <div className="text-2xl font-bold text-ipl-gold">20</div>
+                    <div className="text-xs text-white/70 mt-0.5">Match</div>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold text-ipl-gold">30</div>
+                    <div className="text-xs text-white/70 mt-0.5">Powerplay ×2</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="section-title">Predictions</div>
+              <div className="space-y-3 mb-5">
+                <div className="card p-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 bg-yellow-100 rounded-xl flex items-center justify-center text-xl flex-shrink-0">🪙</div>
+                    <div>
+                      <div className="font-semibold text-sm">Toss Prediction</div>
+                      <div className="text-xs text-gray-500">Pick who wins the coin toss</div>
+                    </div>
+                    <div className="ml-auto text-xl font-bold text-ipl-orange">+10</div>
+                  </div>
+                  <div className="bg-gray-50 rounded-xl p-3 text-xs text-gray-600">
+                    Window closes before the toss. If you pick the correct team you get <strong>10 points</strong>. Wrong pick = 0 points.
+                  </div>
+                </div>
+
+                <div className="card p-4">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 bg-green-100 rounded-xl flex items-center justify-center text-xl flex-shrink-0">🏆</div>
+                    <div>
+                      <div className="font-semibold text-sm">Match Winner</div>
+                      <div className="text-xs text-gray-500">Pick who wins the match</div>
+                    </div>
+                    <div className="ml-auto text-xl font-bold text-ipl-orange">+20</div>
+                  </div>
+                  <div className="bg-gray-50 rounded-xl p-3 text-xs text-gray-600">
+                    Window closes before the first ball is bowled. Correct team = <strong>20 points</strong>. Wrong = 0.
+                  </div>
+                </div>
+              </div>
+
+              <div className="section-title">⚡ Powerplay Guesses</div>
+              <div className="card p-4 mb-5">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center text-xl flex-shrink-0">⚡</div>
+                  <div>
+                    <div className="font-semibold text-sm">Guess the 6-over score</div>
+                    <div className="text-xs text-gray-500">One guess per team's powerplay</div>
+                  </div>
+                  <div className="ml-auto text-xl font-bold text-ipl-orange">+15 max</div>
+                </div>
+                <div className="text-xs text-gray-500 mb-3">
+                  Guess how many runs each team scores in their first 6 overs (powerplay). The closer your guess, the more points you earn.
+                </div>
+                {/* Scoring table */}
+                <div className="rounded-xl overflow-hidden border border-gray-200">
+                  <div className="grid grid-cols-3 bg-ipl-blue text-white text-xs py-2 px-3 font-semibold">
+                    <div>Your guess</div>
+                    <div className="text-center">Difference</div>
+                    <div className="text-right">Points</div>
+                  </div>
+                  {[
+                    { label: 'Exactly right', diff: '±0 runs', pts: 15, highlight: true },
+                    { label: 'Very close',    diff: '±1 run',  pts: 10, highlight: false },
+                    { label: 'Close',         diff: '±3 runs', pts: 7,  highlight: false },
+                    { label: 'Near',          diff: '±5 runs', pts: 5,  highlight: false },
+                    { label: 'Far',           diff: '±8 runs', pts: 2,  highlight: false },
+                    { label: 'Too far',       diff: '9+ runs', pts: 0,  highlight: false },
+                  ].map((row, i) => (
+                    <div key={i} className={`grid grid-cols-3 px-3 py-2 text-xs border-t border-gray-100 ${row.highlight ? 'bg-green-50' : i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                      <div className={row.highlight ? 'font-semibold text-green-700' : 'text-gray-600'}>{row.label}</div>
+                      <div className="text-center text-gray-500">{row.diff}</div>
+                      <div className={`text-right font-bold ${row.pts > 0 ? 'text-ipl-orange' : 'text-gray-300'}`}>
+                        {row.pts > 0 ? `+${row.pts}` : '0'}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="text-xs text-gray-400 mt-2 text-center">
+                  Two powerplay rounds per match (one per team) = max +30 pts
+                </div>
+              </div>
+
+              <div className="section-title">Host Points</div>
+              <div className="space-y-2 mb-5">
+                <div className="card p-4 flex items-center gap-3">
+                  <div className="w-10 h-10 bg-purple-100 rounded-xl flex items-center justify-center text-xl flex-shrink-0">🎮</div>
+                  <div className="flex-1">
+                    <div className="font-semibold text-sm">Mini-game Bonus</div>
+                    <div className="text-xs text-gray-500">Trivia, best commentary, quickest answer...</div>
+                  </div>
+                  <div className="text-lg font-bold text-green-600">+5 / +10</div>
+                </div>
+                <div className="card p-4 flex items-center gap-3">
+                  <div className="w-10 h-10 bg-red-100 rounded-xl flex items-center justify-center text-xl flex-shrink-0">⬇️</div>
+                  <div className="flex-1">
+                    <div className="font-semibold text-sm">Host Deduction</div>
+                    <div className="text-xs text-gray-500">Late arrival, wrong trivia answer...</div>
+                  </div>
+                  <div className="text-lg font-bold text-red-500">-5 / -10</div>
+                </div>
               </div>
 
               <div className="section-title">How to Play</div>
               <div className="card p-4 space-y-3 mb-5">
                 {[
-                  'Join a watch party using the 6-digit code from your host',
-                  'Make your toss prediction before the host closes the window',
-                  'Make your match winner prediction before the first ball',
-                  'Watch the leaderboard update live as results come in',
-                  'Earn bonus points by winning host mini-games during the party',
-                ].map((text, i) => (
-                  <div key={i} className="flex items-start gap-3">
-                    <div className="w-6 h-6 rounded-full bg-ipl-orange text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{i + 1}</div>
-                    <div className="text-sm text-gray-600">{text}</div>
+                  { n: '1', text: 'Join a watch party using the 6-digit code from your host' },
+                  { n: '2', text: 'Pick your toss winner before the host closes the toss window' },
+                  { n: '3', text: 'Pick your match winner before the first ball is bowled' },
+                  { n: '4', text: 'Guess both teams\' powerplay scores (first 6 overs) when the window is open' },
+                  { n: '5', text: 'Scores update live — check the leaderboard throughout the match' },
+                  { n: '6', text: 'Earn bonus points from host mini-games during the party' },
+                ].map(item => (
+                  <div key={item.n} className="flex items-start gap-3">
+                    <div className="w-6 h-6 rounded-full bg-ipl-orange text-white text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{item.n}</div>
+                    <div className="text-sm text-gray-600">{item.text}</div>
                   </div>
                 ))}
               </div>
@@ -208,14 +312,13 @@ export default function UserHome() {
               <div className="section-title">Prediction Windows</div>
               <div className="card p-4 space-y-3">
                 {[
-                  { color: 'bg-green-500', title: 'Toss Window Open', desc: 'You can submit or change your toss prediction' },
-                  { color: 'bg-red-500', title: 'Toss Window Closed', desc: 'No more toss predictions — host closed it before the toss' },
-                  { color: 'bg-blue-500', title: 'Match Window Open', desc: 'You can submit or change your match winner prediction' },
-                  { color: 'bg-gray-400', title: 'Match Window Closed', desc: 'No more match predictions — host closed it before first ball' },
+                  { color: 'bg-green-500', title: 'Window Open', desc: 'You can submit or change your prediction — do it now!' },
+                  { color: 'bg-red-500',   title: 'Window Closed', desc: 'Host closed it — no more changes accepted' },
+                  { color: 'bg-blue-500',  title: 'Result Set', desc: 'Actual score/winner entered — points calculated automatically' },
                 ].map(item => (
                   <div key={item.title}>
                     <div className="flex items-center gap-2 mb-1">
-                      <div className={`w-2 h-2 rounded-full ${item.color}`} />
+                      <div className={`w-2.5 h-2.5 rounded-full ${item.color}`} />
                       <span className="text-sm font-semibold">{item.title}</span>
                     </div>
                     <p className="text-xs text-gray-500 ml-4">{item.desc}</p>
@@ -225,6 +328,7 @@ export default function UserHome() {
             </>
           )}
 
+          {/* ACCOUNT */}
           {tab === 'account' && (
             <>
               <div className="section-title">My Account</div>
@@ -235,22 +339,52 @@ export default function UserHome() {
                   </div>
                   <div>
                     <div className="font-bold text-base">{appUser?.name}</div>
-                    <div className="text-xs text-gray-400 mt-0.5">📱 {(appUser as any)?.phone || firebaseUser?.phoneNumber || 'Phone user'}</div>
-                    {appUser?.favoriteTeam && <div className="text-xs text-ipl-orange font-semibold mt-1">❤️ {appUser.favoriteTeam}</div>}
+                    <div className="text-xs text-gray-400 mt-0.5">
+                      📱 {(appUser as any)?.phone || firebaseUser?.phoneNumber || 'Phone user'}
+                    </div>
+                    {appUser?.favoriteTeam && (
+                      <div className="text-xs text-ipl-orange font-semibold mt-1">❤️ {appUser.favoriteTeam}</div>
+                    )}
                   </div>
                 </div>
                 <hr className="border-gray-100 mb-4" />
+
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Name *</label>
                 <input className="input-field mb-4" value={editName} onChange={e => setEditName(e.target.value)} placeholder="Your name" />
+
                 <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Favorite Food (optional)</label>
                 <input className="input-field mb-4" value={editFood} onChange={e => setEditFood(e.target.value)} placeholder="e.g. Biryani, Samosas..." />
-                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Phone Number</label>
-                <div className="input-field mb-5 bg-gray-50 text-gray-400 text-sm">
-                  {(appUser as any)?.phone || firebaseUser?.phoneNumber || 'N/A'} <span className="text-xs">(cannot be changed)</span>
+
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                  Favorite IPL Team <span className="text-gray-300 font-normal">(optional)</span>
+                </label>
+                <div className="grid grid-cols-5 gap-2 mb-4">
+                  {IPL_TEAMS.map(t => (
+                    <button key={t.id} type="button"
+                      onClick={() => setEditTeam(editTeam === t.id ? '' : t.id as IPLTeam)}
+                      className={cn(
+                        'py-2 rounded-xl text-xs font-bold transition-all border-2',
+                        editTeam === t.id
+                          ? `${t.color} border-transparent scale-105`
+                          : 'bg-gray-50 text-gray-600 border-gray-200 hover:border-gray-300'
+                      )}
+                    >
+                      {t.id}
+                    </button>
+                  ))}
                 </div>
+
+                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Phone Number</label>
+                <div className="input-field mb-5 bg-gray-50 text-gray-400 text-sm cursor-not-allowed">
+                  {(appUser as any)?.phone || firebaseUser?.phoneNumber || 'N/A'}
+                  <span className="text-xs ml-2">(cannot be changed)</span>
+                </div>
+
                 <button onClick={handleSaveAccount} disabled={savingAccount || !editName.trim()}
                   className="btn-primary w-full flex items-center justify-center gap-2">
-                  {savingAccount ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" /> : 'Save Changes'}
+                  {savingAccount
+                    ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    : 'Save Changes'}
                 </button>
               </div>
 
@@ -266,8 +400,14 @@ export default function UserHome() {
                 </div>
               </div>
 
-              <button onClick={async () => { const { signOut } = await import('../../services/authService'); await signOut(); navigate('/login') }}
-                className="w-full py-3 text-sm text-red-500 font-medium border border-red-200 rounded-xl hover:bg-red-50 transition-colors">
+              <button
+                onClick={async () => {
+                  const { signOut } = await import('../../services/authService')
+                  await signOut()
+                  navigate('/login')
+                }}
+                className="w-full py-3 text-sm text-red-500 font-medium border border-red-200 rounded-xl hover:bg-red-50 transition-colors"
+              >
                 Sign Out
               </button>
             </>
@@ -281,8 +421,12 @@ export default function UserHome() {
         <div className="max-w-sm mx-auto flex">
           {navItems.map(item => (
             <button key={item.id} onClick={() => setTab(item.id)}
-              className={`flex-1 flex flex-col items-center py-3 gap-0.5 transition-colors relative ${tab === item.id ? 'text-ipl-orange' : 'text-gray-400 hover:text-gray-600'}`}>
-              {tab === item.id && <div className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-ipl-orange rounded-full" />}
+              className={`flex-1 flex flex-col items-center py-3 gap-0.5 transition-colors relative ${
+                tab === item.id ? 'text-ipl-orange' : 'text-gray-400 hover:text-gray-600'
+              }`}>
+              {tab === item.id && (
+                <div className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-ipl-orange rounded-full" />
+              )}
               <span className="text-xl leading-none">{item.icon}</span>
               <span className="text-xs font-medium">{item.label}</span>
             </button>

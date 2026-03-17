@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { subscribeToParty, startParty, completeParty } from '../../services/partyService'
 import { subscribeToMatch, closeTossPrediction, closeMatchPrediction,
-  openTossPrediction, openMatchPrediction, setTossResult, setMatchResult,
-  openPowerplay, closePowerplay, setPowerplayScore, initPowerplay } from '../../services/matchService'
+  openTossPrediction, openMatchPrediction, setTossResult, setMatchResult } from '../../services/matchService'
 import { subscribeToLeaderboard } from '../../services/scoreService'
 import type { WatchParty, Match, LeaderboardEntry, IPLTeam } from '../../types'
 import { PageHeader, StatusBadge, TeamBadge, LBRow, Spinner } from '../../components/shared'
@@ -20,8 +19,6 @@ export default function HostPartyPage() {
   const [showTossModal, setShowTossModal] = useState(false)
   const [showResultModal, setShowResultModal] = useState(false)
   const [resultMargin, setResultMargin] = useState('')
-  const [ppScore1, setPpScore1] = useState('')
-  const [ppScore2, setPpScore2] = useState('')
 
   useEffect(() => {
     if (!partyId) return
@@ -45,7 +42,6 @@ export default function HostPartyPage() {
 
   const mid = party?.matchId || ''
   const teams: IPLTeam[] = match ? [match.team1, match.team2] : []
-  const pp = match?.powerplay
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><Spinner /></div>
   if (!party) return <div className="page-container text-center pt-20 text-gray-500">Party not found</div>
@@ -55,7 +51,6 @@ export default function HostPartyPage() {
       <PageHeader title={party.name} subtitle={`${party.members.length} members`} onBack={() => navigate('/host')} />
 
       <div className="max-w-sm mx-auto px-4 py-5 space-y-4">
-
         {/* Party controls */}
         <div className="card p-4">
           <div className="flex items-center justify-between mb-3">
@@ -83,7 +78,7 @@ export default function HostPartyPage() {
           </div>
         </div>
 
-        {/* QR link */}
+        {/* QR */}
         <button onClick={() => navigate('/host/qr')}
           className="w-full card p-3 flex items-center gap-3 hover:shadow-md transition-shadow">
           <div className="w-10 h-10 bg-ipl-blue/10 rounded-xl flex items-center justify-center text-xl">📲</div>
@@ -93,10 +88,10 @@ export default function HostPartyPage() {
           </div>
         </button>
 
-        {/* Match controls */}
+        {/* Match prediction windows — host controls these */}
         {match && (
           <div className="card p-4">
-            <div className="font-semibold text-sm mb-3">Match Controls</div>
+            <div className="font-semibold text-sm mb-3">Prediction Windows</div>
             <div className="flex items-center gap-2 mb-4">
               <TeamBadge team={match.team1} size="md" />
               <span className="text-gray-400 text-sm">vs</span>
@@ -120,7 +115,7 @@ export default function HostPartyPage() {
             </div>
 
             {/* Match window */}
-            <div className="border border-gray-100 rounded-xl p-3 mb-3">
+            <div className="border border-gray-100 rounded-xl p-3">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium">Match Prediction</span>
                 <StatusBadge status={match.matchPredictionOpen ? 'match_open' : 'match_closed'} />
@@ -135,87 +130,27 @@ export default function HostPartyPage() {
               {match.result && <div className="text-xs text-gray-500 mt-2">Winner: <TeamBadge team={match.result.winner} size="xs" /> · {match.result.margin}</div>}
             </div>
 
-            {/* Powerplay section */}
-            <div className="border border-blue-100 rounded-xl p-3 bg-blue-50/30">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-sm font-semibold">⚡ Powerplay Guesses</span>
-                {!pp && (
-                  <button onClick={() => action('pp_init', () => initPowerplay(mid), 'Powerplay enabled!')}
-                    disabled={!!actionLoading} className="btn-primary text-xs py-1.5 px-3">Enable</button>
-                )}
-              </div>
-
-              {pp && (
-                <div className="space-y-3">
-                  {/* Team 1 powerplay */}
-                  <div className="bg-white rounded-xl p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="text-xs font-medium flex items-center gap-1.5">
-                        <TeamBadge team={match.team1} size="xs" />
-                        <span>Powerplay</span>
-                      </div>
-                      <StatusBadge status={pp.team1Open ? 'toss_open' : 'toss_closed'} />
-                    </div>
-                    <div className="flex gap-2">
-                      {!pp.team1Open
-                        ? <button onClick={() => action('pp1_open', () => openPowerplay(mid, 1), `${match.team1} powerplay open`)} disabled={!!actionLoading} className="btn-secondary text-xs py-1.5 px-3">Open</button>
-                        : <button onClick={() => action('pp1_close', () => closePowerplay(mid, 1), `${match.team1} powerplay closed`)} disabled={!!actionLoading} className="btn-danger text-xs py-1.5 px-3">Close</button>
-                      }
-                      <div className="flex gap-1 flex-1">
-                        <input type="number" placeholder="Actual score" value={ppScore1}
-                          onChange={e => setPpScore1(e.target.value)}
-                          className="input-field flex-1 py-1.5 text-sm" min="0" max="120" />
-                        <button
-                          onClick={() => action('pp1_score', () => setPowerplayScore(mid, 1, parseInt(ppScore1)), `${match.team1} PP score set — scoring!`)}
-                          disabled={!!actionLoading || !ppScore1}
-                          className="btn-primary text-xs px-3 py-1.5">Set</button>
-                      </div>
-                    </div>
-                    {pp.team1Score !== undefined && <div className="text-xs text-blue-600 font-medium mt-2">Actual: {pp.team1Score} runs</div>}
-                  </div>
-
-                  {/* Team 2 powerplay */}
-                  <div className="bg-white rounded-xl p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="text-xs font-medium flex items-center gap-1.5">
-                        <TeamBadge team={match.team2} size="xs" />
-                        <span>Powerplay</span>
-                      </div>
-                      <StatusBadge status={pp.team2Open ? 'toss_open' : 'toss_closed'} />
-                    </div>
-                    <div className="flex gap-2">
-                      {!pp.team2Open
-                        ? <button onClick={() => action('pp2_open', () => openPowerplay(mid, 2), `${match.team2} powerplay open`)} disabled={!!actionLoading} className="btn-secondary text-xs py-1.5 px-3">Open</button>
-                        : <button onClick={() => action('pp2_close', () => closePowerplay(mid, 2), `${match.team2} powerplay closed`)} disabled={!!actionLoading} className="btn-danger text-xs py-1.5 px-3">Close</button>
-                      }
-                      <div className="flex gap-1 flex-1">
-                        <input type="number" placeholder="Actual score" value={ppScore2}
-                          onChange={e => setPpScore2(e.target.value)}
-                          className="input-field flex-1 py-1.5 text-sm" min="0" max="120" />
-                        <button
-                          onClick={() => action('pp2_score', () => setPowerplayScore(mid, 2, parseInt(ppScore2)), `${match.team2} PP score set — scoring!`)}
-                          disabled={!!actionLoading || !ppScore2}
-                          className="btn-primary text-xs px-3 py-1.5">Set</button>
-                      </div>
-                    </div>
-                    {pp.team2Score !== undefined && <div className="text-xs text-blue-600 font-medium mt-2">Actual: {pp.team2Score} runs</div>}
-                  </div>
+            {/* Powerplay status (read-only for host) */}
+            {match.powerplay && (
+              <div className="mt-3 bg-blue-50 rounded-xl p-3">
+                <div className="text-xs font-semibold text-blue-700 mb-2">⚡ Powerplay (managed by Admin)</div>
+                <div className="flex gap-4 text-xs text-blue-600">
+                  <span>{match.team1}: {match.powerplay.team1Open ? '🟢 Open' : match.powerplay.team1Score !== undefined ? `✓ ${match.powerplay.team1Score} runs` : '🔴 Closed'}</span>
+                  <span>{match.team2}: {match.powerplay.team2Open ? '🟢 Open' : match.powerplay.team2Score !== undefined ? `✓ ${match.powerplay.team2Score} runs` : '🔴 Closed'}</span>
                 </div>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         )}
 
-        {/* Leaderboard preview */}
+        {/* Leaderboard */}
         {leaderboard.length > 0 && (
           <>
             <div className="section-title">Leaderboard</div>
             <div className="space-y-2">
               {leaderboard.slice(0, 5).map(e => <LBRow key={e.userId} entry={e} />)}
             </div>
-            <button onClick={() => navigate(`/host/party/${partyId}/leaderboard`)} className="btn-secondary w-full text-sm">
-              Full Leaderboard →
-            </button>
+            <button onClick={() => navigate(`/host/party/${partyId}/leaderboard`)} className="btn-secondary w-full text-sm">Full Leaderboard →</button>
           </>
         )}
       </div>
@@ -228,10 +163,7 @@ export default function HostPartyPage() {
             <div className="space-y-2 mb-4">
               {teams.map(team => (
                 <button key={team}
-                  onClick={async () => {
-                    await action('toss_result', () => setTossResult(mid, team), `${team} won toss — scores updated!`)
-                    setShowTossModal(false)
-                  }}
+                  onClick={async () => { await action('toss_result', () => setTossResult(mid, team), `${team} won toss!`); setShowTossModal(false) }}
                   className="w-full p-3 rounded-xl border-2 border-gray-200 hover:border-ipl-orange text-left flex items-center gap-2">
                   <TeamBadge team={team} size="md" />
                 </button>
@@ -250,11 +182,7 @@ export default function HostPartyPage() {
             <div className="space-y-2 mb-4">
               {teams.map(team => (
                 <button key={team}
-                  onClick={async () => {
-                    const margin = resultMargin.trim() || 'TBD'
-                    await action('match_result', () => setMatchResult(mid, team, margin), `${team} won — scores updated!`)
-                    setShowResultModal(false)
-                  }}
+                  onClick={async () => { await action('match_result', () => setMatchResult(mid, team, resultMargin || 'TBD'), `${team} won!`); setShowResultModal(false) }}
                   className="w-full p-3 rounded-xl border-2 border-gray-200 hover:border-ipl-orange text-left flex items-center gap-2">
                   <TeamBadge team={team} size="md" />
                   <span className="text-sm text-gray-500">won</span>

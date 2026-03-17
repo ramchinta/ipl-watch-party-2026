@@ -1,30 +1,44 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { initRecaptcha, sendOTP } from '../../services/authService'
+import { sendOTP, initRecaptcha } from '../../services/authService'
 import toast from 'react-hot-toast'
+
+const COUNTRY_CODES = [
+  { code: '+91', flag: '🇮🇳', label: 'India' },
+  { code: '+1',  flag: '🇺🇸', label: 'US / Canada' },
+]
 
 export default function LoginPage() {
   const navigate = useNavigate()
   const [params] = useSearchParams()
-  const [phone, setPhone] = useState('+1')
+  const [countryCode, setCountryCode] = useState('+91')
+  const [phone, setPhone] = useState('')
   const [loading, setLoading] = useState(false)
 
-  useEffect(() => {
-    initRecaptcha('recaptcha-container')
-  }, [])
+  function getFullNumber() {
+    return `${countryCode}${phone.replace(/\D/g, '')}`
+  }
+
+  function isValid() {
+    return phone.replace(/\D/g, '').length >= 10
+  }
 
   async function handleSend() {
-    const cleaned = phone.trim()
-    if (cleaned.length < 10) return toast.error('Enter a valid phone number')
+    if (!isValid()) return toast.error('Enter a valid 10-digit phone number')
     setLoading(true)
+    initRecaptcha('recaptcha-container')
     try {
-      await sendOTP(cleaned)
-      // Pass through any join params
+      await sendOTP(getFullNumber())
       const redirect = params.get('redirect') || ''
       const host = params.get('host') || ''
-      navigate(`/otp?phone=${encodeURIComponent(cleaned)}&redirect=${redirect}&host=${host}`)
+      navigate(`/otp?phone=${encodeURIComponent(getFullNumber())}&redirect=${redirect}&host=${host}`)
     } catch (e: any) {
-      toast.error(e.message || 'Failed to send OTP')
+      const msg =
+        e.code === 'auth/invalid-phone-number' ? 'Invalid phone number — check and try again'
+        : e.code === 'auth/too-many-requests'   ? 'Too many attempts — wait a few minutes'
+        : e.code === 'auth/billing-not-enabled'  ? 'Phone auth requires Firebase Blaze plan'
+        : e.message || 'Failed to send OTP'
+      toast.error(msg)
     } finally {
       setLoading(false)
     }
@@ -49,19 +63,49 @@ export default function LoginPage() {
           <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
             Phone Number
           </label>
-          <input
-            className="input-field mb-4 text-lg tracking-wide"
-            type="tel"
-            value={phone}
-            onChange={e => setPhone(e.target.value)}
-            placeholder="+1 555 000 0000"
-            onKeyDown={e => e.key === 'Enter' && handleSend()}
-            autoFocus
-          />
+
+          {/* Country code select + number input side by side */}
+          <div className="flex gap-2 mb-4">
+            {/* Native select dropdown */}
+            <select
+              value={countryCode}
+              onChange={e => { setCountryCode(e.target.value); setPhone('') }}
+              className="flex-shrink-0 border border-gray-200 rounded-xl bg-gray-50 px-3 py-3
+                         text-sm font-medium text-gray-700 focus:border-ipl-orange focus:ring-2
+                         focus:ring-ipl-orange/10 outline-none cursor-pointer"
+              style={{ minWidth: '110px' }}
+            >
+              {COUNTRY_CODES.map(c => (
+                <option key={c.code} value={c.code}>
+                  {c.flag} {c.code}
+                </option>
+              ))}
+            </select>
+
+            {/* Phone number input */}
+            <input
+              className="input-field flex-1 text-lg tracking-wide"
+              type="tel"
+              value={phone}
+              onChange={e => setPhone(e.target.value.replace(/\D/g, ''))}
+              placeholder={countryCode === '+91' ? '9876543210' : '5550001234'}
+              onKeyDown={e => e.key === 'Enter' && handleSend()}
+              autoFocus
+              maxLength={12}
+              inputMode="numeric"
+            />
+          </div>
+
+          {/* Preview full number */}
+          {phone.length >= 5 && (
+            <p className="text-xs text-gray-400 mb-4 -mt-2">
+              Sending OTP to: <span className="font-mono font-semibold text-gray-600">{getFullNumber()}</span>
+            </p>
+          )}
 
           <button
             onClick={handleSend}
-            disabled={loading}
+            disabled={loading || !isValid()}
             className="btn-primary w-full flex items-center justify-center gap-2"
           >
             {loading
@@ -81,7 +125,7 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* Invisible recaptcha */}
+      {/* Invisible reCAPTCHA */}
       <div id="recaptcha-container" />
     </div>
   )

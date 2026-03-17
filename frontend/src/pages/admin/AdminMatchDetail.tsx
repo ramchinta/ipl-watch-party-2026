@@ -1,12 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import {
-  subscribeToMatch, updateMatch, setTossResult,
-  setMatchResult, closeTossPrediction, closeMatchPrediction,
-  openTossPrediction, openMatchPrediction
+  subscribeToMatch, updateMatch, setTossResult, setMatchResult,
+  closeTossPrediction, closeMatchPrediction, openTossPrediction, openMatchPrediction,
+  openPowerplay, closePowerplay, setPowerplayScore, initPowerplay
 } from '../../services/matchService'
 import type { Match, IPLTeam } from '../../types'
-import { IPL_TEAMS } from '../../types'
 import { PageHeader, TeamBadge, StatusBadge, Spinner } from '../../components/shared'
 import { formatMatchDate } from '../../utils/helpers'
 import toast from 'react-hot-toast'
@@ -17,12 +16,12 @@ export default function AdminMatchDetail() {
   const [match, setMatch] = useState<Match | null>(null)
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
-
-  // Editable fields
   const [venue, setVenue] = useState('')
   const [city, setCity] = useState('')
   const [timeIST, setTimeIST] = useState('')
   const [resultMargin, setResultMargin] = useState('')
+  const [ppScore1, setPpScore1] = useState('')
+  const [ppScore2, setPpScore2] = useState('')
 
   useEffect(() => {
     if (!matchId) return
@@ -44,16 +43,14 @@ export default function AdminMatchDetail() {
 
   async function saveEdits() {
     if (!matchId) return
-    await doAction(
-      () => updateMatch(matchId, { venue, city, timeIST }),
-      'Match updated'
-    )
+    await doAction(() => updateMatch(matchId, { venue, city, timeIST }), 'Match updated')
     setEditing(false)
   }
 
   if (!match) return <div className="min-h-screen flex items-center justify-center"><Spinner /></div>
 
   const teams: IPLTeam[] = [match.team1, match.team2]
+  const pp = match.powerplay
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -64,6 +61,7 @@ export default function AdminMatchDetail() {
       />
 
       <div className="max-w-lg mx-auto px-4 py-5 space-y-4">
+
         {/* Match info */}
         <div className="card p-4">
           <div className="flex items-center justify-between mb-3">
@@ -90,9 +88,7 @@ export default function AdminMatchDetail() {
                 <input className="input-field" value={timeIST} onChange={e => setTimeIST(e.target.value)} placeholder="7:30 PM IST" />
               </div>
               <div className="flex gap-2">
-                <button onClick={saveEdits} disabled={saving} className="btn-primary flex-1 text-sm py-2.5">
-                  {saving ? '...' : 'Save'}
-                </button>
+                <button onClick={saveEdits} disabled={saving} className="btn-primary flex-1 text-sm py-2.5">{saving ? '...' : 'Save'}</button>
                 <button onClick={() => setEditing(false)} className="btn-secondary flex-1 text-sm py-2.5">Cancel</button>
               </div>
             </div>
@@ -101,115 +97,149 @@ export default function AdminMatchDetail() {
               <div className="text-sm text-gray-600 mb-1">{match.venue}</div>
               <div className="text-xs text-gray-400">{match.city} · {match.timeIST}</div>
               <div className="text-xs text-gray-400">{formatMatchDate(match.matchDate)}</div>
-              <button onClick={() => setEditing(true)} className="mt-3 btn-secondary text-xs py-1.5 px-3">
-                ✏️ Edit Venue / Time
-              </button>
+              <button onClick={() => setEditing(true)} className="mt-3 btn-secondary text-xs py-1.5 px-3">✏️ Edit Venue / Time</button>
             </>
           )}
         </div>
 
-        {/* Toss prediction window */}
+        {/* Toss window */}
         <div className="card p-4">
           <div className="flex items-center justify-between mb-3">
             <span className="font-semibold text-sm">Toss Prediction Window</span>
             <StatusBadge status={match.tossPredictionOpen ? 'toss_open' : 'toss_closed'} />
           </div>
           <div className="flex gap-2 mb-3">
-            <button
-              onClick={() => doAction(() => openTossPrediction(match.id), 'Toss window opened')}
-              disabled={saving || match.tossPredictionOpen}
-              className="btn-secondary text-sm flex-1 py-2"
-            >
-              Open
-            </button>
-            <button
-              onClick={() => doAction(() => closeTossPrediction(match.id), 'Toss window closed')}
-              disabled={saving || !match.tossPredictionOpen}
-              className="btn-danger text-sm flex-1 py-2"
-            >
-              Close
-            </button>
+            <button onClick={() => doAction(() => openTossPrediction(match.id), 'Toss window opened')}
+              disabled={saving || match.tossPredictionOpen} className="btn-secondary text-sm flex-1 py-2">Open</button>
+            <button onClick={() => doAction(() => closeTossPrediction(match.id), 'Toss window closed')}
+              disabled={saving || !match.tossPredictionOpen} className="btn-danger text-sm flex-1 py-2">Close</button>
           </div>
-
           <div className="text-xs text-gray-500 font-medium mb-2">Set Toss Winner</div>
           <div className="flex gap-2">
             {teams.map(team => (
-              <button
-                key={team}
+              <button key={team}
                 onClick={() => doAction(() => setTossResult(match.id, team), `${team} won toss — scores updated!`)}
                 disabled={saving}
-                className={`flex-1 py-2 rounded-xl border text-sm font-medium transition-all ${
-                  match.tossWinner === team
-                    ? 'border-ipl-orange bg-ipl-orange-light text-ipl-orange'
-                    : 'border-gray-200 bg-white hover:border-gray-300'
-                }`}
-              >
+                className={`flex-1 py-2 rounded-xl border text-sm font-medium transition-all ${match.tossWinner === team ? 'border-ipl-orange bg-ipl-orange-light' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
                 <TeamBadge team={team} size="sm" />
               </button>
             ))}
           </div>
-          {match.tossWinner && (
-            <p className="text-xs text-gray-500 mt-2">
-              Toss winner set: <strong>{match.tossWinner}</strong>
-            </p>
-          )}
+          {match.tossWinner && <p className="text-xs text-green-600 mt-2">✓ Toss won by {match.tossWinner}</p>}
         </div>
 
-        {/* Match prediction window */}
+        {/* Match window */}
         <div className="card p-4">
           <div className="flex items-center justify-between mb-3">
             <span className="font-semibold text-sm">Match Prediction Window</span>
             <StatusBadge status={match.matchPredictionOpen ? 'match_open' : 'match_closed'} />
           </div>
           <div className="flex gap-2 mb-3">
-            <button
-              onClick={() => doAction(() => openMatchPrediction(match.id), 'Match window opened')}
-              disabled={saving || match.matchPredictionOpen}
-              className="btn-secondary text-sm flex-1 py-2"
-            >
-              Open
-            </button>
-            <button
-              onClick={() => doAction(() => closeMatchPrediction(match.id), 'Match window closed')}
-              disabled={saving || !match.matchPredictionOpen}
-              className="btn-danger text-sm flex-1 py-2"
-            >
-              Close
-            </button>
+            <button onClick={() => doAction(() => openMatchPrediction(match.id), 'Match window opened')}
+              disabled={saving || match.matchPredictionOpen} className="btn-secondary text-sm flex-1 py-2">Open</button>
+            <button onClick={() => doAction(() => closeMatchPrediction(match.id), 'Match window closed')}
+              disabled={saving || !match.matchPredictionOpen} className="btn-danger text-sm flex-1 py-2">Close</button>
           </div>
-
           <div className="text-xs text-gray-500 font-medium mb-2">Set Match Result</div>
           <div className="flex gap-2 mb-2">
             {teams.map(team => (
-              <button
-                key={team}
-                onClick={() => doAction(
-                  () => setMatchResult(match.id, team, resultMargin || 'TBD'),
-                  `${team} won — all scores calculated!`
-                )}
+              <button key={team}
+                onClick={() => doAction(() => setMatchResult(match.id, team, resultMargin || 'TBD'), `${team} won — all scores calculated!`)}
                 disabled={saving}
-                className={`flex-1 py-2 rounded-xl border text-sm font-medium transition-all ${
-                  match.result?.winner === team
-                    ? 'border-ipl-orange bg-ipl-orange-light'
-                    : 'border-gray-200 bg-white hover:border-gray-300'
-                }`}
-              >
+                className={`flex-1 py-2 rounded-xl border text-sm font-medium transition-all ${match.result?.winner === team ? 'border-ipl-orange bg-ipl-orange-light' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
                 <TeamBadge team={team} size="sm" />
               </button>
             ))}
           </div>
-          <input
-            className="input-field text-sm"
-            placeholder="Margin e.g. 'by 5 wickets' (optional)"
-            value={resultMargin}
-            onChange={e => setResultMargin(e.target.value)}
-          />
-          {match.result && (
-            <p className="text-xs text-green-600 mt-2">
-              ✓ Result recorded: {match.result.winner} won {match.result.margin}
+          <input className="input-field text-sm" placeholder="Margin e.g. 'by 5 wickets'" value={resultMargin} onChange={e => setResultMargin(e.target.value)} />
+          {match.result && <p className="text-xs text-green-600 mt-2">✓ {match.result.winner} won · {match.result.margin}</p>}
+        </div>
+
+        {/* Powerplay section — admin only */}
+        <div className="card p-4">
+          <div className="flex items-center justify-between mb-3">
+            <span className="font-semibold text-sm">⚡ Powerplay Guesses</span>
+            {!pp && (
+              <button
+                onClick={() => doAction(() => initPowerplay(match.id), 'Powerplay enabled!')}
+                disabled={saving}
+                className="btn-primary text-xs py-1.5 px-4"
+              >
+                Enable
+              </button>
+            )}
+          </div>
+
+          {!pp && (
+            <p className="text-xs text-gray-400">
+              Click Enable to let users guess both teams' 6-over powerplay scores.
+              Once enabled, open each window before the powerplay starts.
             </p>
           )}
+
+          {pp && (
+            <div className="space-y-4">
+              {/* Team 1 powerplay */}
+              <div className="border border-gray-100 rounded-xl p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2 text-xs font-medium">
+                    <TeamBadge team={match.team1} size="xs" />
+                    <span>Powerplay (6 overs)</span>
+                  </div>
+                  <StatusBadge status={pp.team1Open ? 'toss_open' : 'toss_closed'} />
+                </div>
+                <div className="flex gap-2 mb-2">
+                  <button onClick={() => doAction(() => openPowerplay(match.id, 1), `${match.team1} PP window opened`)}
+                    disabled={saving || pp.team1Open} className="btn-secondary text-xs py-1.5 flex-1">Open Window</button>
+                  <button onClick={() => doAction(() => closePowerplay(match.id, 1), `${match.team1} PP window closed`)}
+                    disabled={saving || !pp.team1Open} className="btn-danger text-xs py-1.5 flex-1">Close Window</button>
+                </div>
+                <div className="flex gap-2">
+                  <input type="number" placeholder={`${match.team1} actual score`} value={ppScore1}
+                    onChange={e => setPpScore1(e.target.value)} min="0" max="120"
+                    className="input-field flex-1 text-sm py-2" />
+                  <button
+                    onClick={() => doAction(() => setPowerplayScore(match.id, 1, parseInt(ppScore1)), `${match.team1} PP score set — scoring all guesses!`)}
+                    disabled={saving || !ppScore1}
+                    className="btn-primary text-sm px-4 py-2">Set Score</button>
+                </div>
+                {pp.team1Score !== undefined && (
+                  <p className="text-xs text-blue-600 font-medium mt-2">✓ Actual score: {pp.team1Score} runs</p>
+                )}
+              </div>
+
+              {/* Team 2 powerplay */}
+              <div className="border border-gray-100 rounded-xl p-3">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2 text-xs font-medium">
+                    <TeamBadge team={match.team2} size="xs" />
+                    <span>Powerplay (6 overs)</span>
+                  </div>
+                  <StatusBadge status={pp.team2Open ? 'toss_open' : 'toss_closed'} />
+                </div>
+                <div className="flex gap-2 mb-2">
+                  <button onClick={() => doAction(() => openPowerplay(match.id, 2), `${match.team2} PP window opened`)}
+                    disabled={saving || pp.team2Open} className="btn-secondary text-xs py-1.5 flex-1">Open Window</button>
+                  <button onClick={() => doAction(() => closePowerplay(match.id, 2), `${match.team2} PP window closed`)}
+                    disabled={saving || !pp.team2Open} className="btn-danger text-xs py-1.5 flex-1">Close Window</button>
+                </div>
+                <div className="flex gap-2">
+                  <input type="number" placeholder={`${match.team2} actual score`} value={ppScore2}
+                    onChange={e => setPpScore2(e.target.value)} min="0" max="120"
+                    className="input-field flex-1 text-sm py-2" />
+                  <button
+                    onClick={() => doAction(() => setPowerplayScore(match.id, 2, parseInt(ppScore2)), `${match.team2} PP score set — scoring all guesses!`)}
+                    disabled={saving || !ppScore2}
+                    className="btn-primary text-sm px-4 py-2">Set Score</button>
+                </div>
+                {pp.team2Score !== undefined && (
+                  <p className="text-xs text-blue-600 font-medium mt-2">✓ Actual score: {pp.team2Score} runs</p>
+                )}
+              </div>
+            </div>
+          )}
         </div>
+
       </div>
     </div>
   )
