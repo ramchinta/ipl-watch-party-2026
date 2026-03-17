@@ -1,7 +1,6 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
     function isAuthenticated() { return request.auth != null; }
     function isAdmin() { return isAuthenticated() && request.auth.token.role == 'admin'; }
     function isHost() { return isAuthenticated() && request.auth.token.role == 'host'; }
@@ -9,54 +8,40 @@ service cloud.firestore {
       return isAuthenticated() &&
         get(/databases/$(database)/documents/watchParties/$(partyId)).data.hostId == request.auth.uid;
     }
-
     match /config/{docId} {
       allow read: if isAuthenticated();
       allow write: if isAdmin();
     }
-
     match /matches/{matchId} {
       allow read: if isAuthenticated();
-      allow write: if isAdmin();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || isHost();
     }
-
     match /watchParties/{partyId} {
       allow read: if isAuthenticated();
       allow create: if isHost();
-      // Allow any authenticated user to update members array (joining)
       allow update: if isAuthenticated() || isAdmin() || isPartyHost(partyId);
       allow delete: if isAdmin() || isPartyHost(partyId);
     }
-
     match /users/{userId} {
       allow read: if isAuthenticated();
       allow create, update: if isAuthenticated() && request.auth.uid == userId;
       allow delete: if isAdmin();
     }
-
     match /predictions/{predId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow update: if isAuthenticated() && resource.data.userId == request.auth.uid && resource.data.locked == false;
       allow delete: if isAdmin();
     }
-
-    match /predictionWindows/{windowId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin() || isPartyHost(windowId.split('_')[0]);
-    }
-
-    match /leaderboards/{partyId} {
-      allow read: if isAuthenticated();
-      allow write: if isAdmin();
-    }
-
-    // Allow users to create/update their own score docs (needed for joinParty)
     match /scores/{scoreId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
-      allow update: if isAdmin() ||
-        (isAuthenticated() && resource.data.userId == request.auth.uid);
+      allow update: if isAdmin() || isHost() || (isAuthenticated() && resource.data.userId == request.auth.uid);
+    }
+    match /leaderboards/{partyId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
     }
   }
 }
