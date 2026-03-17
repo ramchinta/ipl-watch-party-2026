@@ -74,15 +74,40 @@ export default function PredictPage() {
   const pp   = match.powerplay
   const teams: IPLTeam[] = [match.team1, match.team2]
 
-  // Read QState from match doc (default future if missing)
-  const ts  = (match.tossState  || 'future') as QState
-  const ms  = (match.matchState || 'future') as QState
-  const pp1s = !pp ? null : (pp.team1State || 'future') as QState
-  const pp2s = !pp ? null : (pp.team2State || 'future') as QState
+  // ── Derive QState — backward-compatible with old boolean schema ──────────
+  // Priority: new QState field > result/tossWinner present > old boolean > future
+  function deriveTossState(m: Match): QState {
+    const s = (m as any).tossState as QState | undefined
+    if (s && s !== 'future') return s           // trust explicit non-future state
+    if (m.tossWinner) return 'completed'         // result already in
+    if ((m as any).tossPredictionOpen === true) return 'open'
+    if ((m as any).tossPredictionOpen === false && m.status !== 'upcoming') return 'closed'
+    return s || 'future'
+  }
+  function deriveMatchState(m: Match): QState {
+    const s = (m as any).matchState as QState | undefined
+    if (s && s !== 'future') return s
+    if (m.result) return 'completed'
+    if ((m as any).matchPredictionOpen === true) return 'open'
+    if ((m as any).matchPredictionOpen === false && m.status !== 'upcoming') return 'closed'
+    return s || 'future'
+  }
+  function derivePPState(ppState: any, score: number | undefined, openBool: boolean | undefined): QState {
+    const s = ppState as QState | undefined
+    if (s && s !== 'future') return s
+    if (score != null) return 'completed'
+    if (openBool === true) return 'open'
+    if (openBool === false) return 'closed'
+    return s || 'future'
+  }
 
-  // Questions visible to users: exclude future and skipped
+  const ts   = deriveTossState(match)
+  const ms   = deriveMatchState(match)
+  const pp1s = !pp ? null : derivePPState((pp as any).team1State, pp.team1Score, (pp as any).team1Open)
+  const pp2s = !pp ? null : derivePPState((pp as any).team2State, pp.team2Score, (pp as any).team2Open)
+
   type QItem = { id: string; state: QState; order: number }
-  const sortOrder: Record<QState, number> = { open: 0, closed: 1, completed: 2, future: 99, skipped: 99 }
+  const sortOrder: Record<QState, number> = { open: 0, closed: 1, completed: 2, future: 3, skipped: 99 }
 
   const allQuestions: QItem[] = [
     { id: 'toss',  state: ts,  order: 1 },
@@ -91,9 +116,9 @@ export default function PredictPage() {
     ...(pp2s ? [{ id: 'pp2', state: pp2s, order: 4 }] : []),
   ]
 
-  // Users only see open, closed, completed — not future or skipped
+  // Show ALL questions except skipped — future shows as 'Coming up'
   const visibleQuestions = allQuestions
-    .filter(q => q.state !== 'future' && q.state !== 'skipped')
+    .filter(q => q.state !== 'skipped')
     .sort((a, b) => sortOrder[a.state] - sortOrder[b.state] || a.order - b.order)
 
   const anyOpen = visibleQuestions.some(q => q.state === 'open')
@@ -114,86 +139,113 @@ export default function PredictPage() {
     if (state === 'closed') return (
       <div className="flex items-center gap-1.5">
         <div className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" />
-        <span className="text-xs text-orange-500 font-medium">Locked</span>
+        <span className="text-xs text-orange-500 font-medium">Locked — awaiting result</span>
       </div>
+    )
+    if (state === 'future') return (
+      <span className="text-xs text-gray-400 font-medium bg-gray-100 px-2 py-0.5 rounded-full">Coming up</span>
     )
     return <span className="text-xs text-blue-600 font-medium bg-blue-50 px-2 py-0.5 rounded-full">Result In</span>
   }
 
   // ── Individual question cards ───────────────────────────────────────────
   function TossCard() {
-    const isOpen = ts === 'open'
-    const isClosed = ts === 'closed'
+    const isOpen      = ts === 'open'
+    const isClosed    = ts === 'closed'
     const isCompleted = ts === 'completed'
+    const isFuture    = ts === 'future'
     return (
-      <div className="card p-4">
+      <div className={`card p-4 ${isFuture ? 'opacity-60' : ''}`}>
         <div className="flex items-center justify-between mb-2">
           <div className="font-semibold text-sm">🪙 Who wins the toss?</div>
           <StateBadge state={ts} />
         </div>
         <div className="text-xs text-gray-400 mb-3">+{POINTS.TOSS_CORRECT} pts if correct</div>
-        <div className="space-y-2">
-          {teams.map(team => (
-            <PredCard key={team} team={team}
-              selected={tossWinner === team}
-              disabled={!isOpen}
-              points={POINTS.TOSS_CORRECT}
-              onClick={() => isOpen && setTossWinner(tossWinner === team ? null : team)} />
-          ))}
-        </div>
-        {isClosed && (
-          <p className="text-xs text-center text-orange-500 mt-2 bg-orange-50 rounded-xl py-2">
-            🔒 Your pick is locked — waiting for toss result
-          </p>
-        )}
-        {isCompleted && match.tossWinner && (
-          <div className="mt-2 text-xs text-center">
-            Toss won by <strong>{match.tossWinner}</strong>
-            {tossWinner && (
-              <span className={`ml-2 font-bold ${tossWinner === match.tossWinner ? 'text-green-600' : 'text-red-500'}`}>
-                {tossWinner === match.tossWinner ? `+${POINTS.TOSS_CORRECT} pts ✓` : '0 pts ✗'}
-              </span>
-            )}
+        {isFuture ? (
+          <div className="text-xs text-center text-gray-400 py-3 bg-gray-50 rounded-xl">
+            Predictions not open yet — check back before the match
           </div>
+        ) : (
+          <>
+            <div className="space-y-2">
+              {teams.map(team => (
+                <PredCard key={team} team={team}
+                  selected={tossWinner === team}
+                  disabled={!isOpen}
+                  points={POINTS.TOSS_CORRECT}
+                  onClick={() => isOpen && setTossWinner(tossWinner === team ? null : team)} />
+              ))}
+            </div>
+            {isClosed && (
+              <p className="text-xs text-center text-orange-500 mt-2 bg-orange-50 rounded-xl py-2">
+                🔒 Your pick is locked — waiting for toss result
+              </p>
+            )}
+            {isCompleted && (
+              <div className="mt-2 text-xs text-center">
+                {match.tossWinner
+                  ? <>Toss won by <strong>{match.tossWinner}</strong>
+                    {tossWinner && (
+                      <span className={`ml-2 font-bold ${tossWinner === match.tossWinner ? 'text-green-600' : 'text-red-500'}`}>
+                        {tossWinner === match.tossWinner ? `+${POINTS.TOSS_CORRECT} pts ✓` : '0 pts ✗'}
+                      </span>
+                    )}</>
+                  : <span className="text-gray-400">No toss result recorded</span>
+                }
+              </div>
+            )}
+          </>
         )}
       </div>
     )
   }
 
   function MatchCard() {
-    const isOpen = ms === 'open'
-    const isClosed = ms === 'closed'
+    const isOpen      = ms === 'open'
+    const isClosed    = ms === 'closed'
     const isCompleted = ms === 'completed'
+    const isFuture    = ms === 'future'
     return (
-      <div className="card p-4">
+      <div className={`card p-4 ${isFuture ? 'opacity-60' : ''}`}>
         <div className="flex items-center justify-between mb-2">
           <div className="font-semibold text-sm">🏆 Who wins the match?</div>
           <StateBadge state={ms} />
         </div>
         <div className="text-xs text-gray-400 mb-3">+{POINTS.MATCH_CORRECT} pts if correct</div>
-        <div className="space-y-2">
-          {teams.map(team => (
-            <PredCard key={team} team={team}
-              selected={matchWinner === team}
-              disabled={!isOpen}
-              points={POINTS.MATCH_CORRECT}
-              onClick={() => isOpen && setMatchWinner(matchWinner === team ? null : team)} />
-          ))}
-        </div>
-        {isClosed && (
-          <p className="text-xs text-center text-orange-500 mt-2 bg-orange-50 rounded-xl py-2">
-            🔒 Your pick is locked — waiting for match result
-          </p>
-        )}
-        {isCompleted && match.result?.winner && (
-          <div className="mt-2 text-xs text-center">
-            Won by <strong>{match.result.winner}</strong>
-            {matchWinner && (
-              <span className={`ml-2 font-bold ${matchWinner === match.result.winner ? 'text-green-600' : 'text-red-500'}`}>
-                {matchWinner === match.result.winner ? `+${POINTS.MATCH_CORRECT} pts ✓` : '0 pts ✗'}
-              </span>
-            )}
+        {isFuture ? (
+          <div className="text-xs text-center text-gray-400 py-3 bg-gray-50 rounded-xl">
+            Predictions not open yet — check back before the first ball
           </div>
+        ) : (
+          <>
+            <div className="space-y-2">
+              {teams.map(team => (
+                <PredCard key={team} team={team}
+                  selected={matchWinner === team}
+                  disabled={!isOpen}
+                  points={POINTS.MATCH_CORRECT}
+                  onClick={() => isOpen && setMatchWinner(matchWinner === team ? null : team)} />
+              ))}
+            </div>
+            {isClosed && (
+              <p className="text-xs text-center text-orange-500 mt-2 bg-orange-50 rounded-xl py-2">
+                🔒 Your pick is locked — waiting for match result
+              </p>
+            )}
+            {isCompleted && (
+              <div className="mt-2 text-xs text-center">
+                {match.result?.winner
+                  ? <>Won by <strong>{match.result.winner}</strong>
+                    {matchWinner && (
+                      <span className={`ml-2 font-bold ${matchWinner === match.result.winner ? 'text-green-600' : 'text-red-500'}`}>
+                        {matchWinner === match.result.winner ? `+${POINTS.MATCH_CORRECT} pts ✓` : '0 pts ✗'}
+                      </span>
+                    )}</>
+                  : <span className="text-gray-400">No result recorded</span>
+                }
+              </div>
+            )}
+          </>
         )}
       </div>
     )
@@ -208,6 +260,7 @@ export default function PredictPage() {
     const isOpen      = state === 'open'
     const isClosed    = state === 'closed'
     const isCompleted = state === 'completed'
+    const isFuture    = state === 'future'
 
     const scale = [
       { label: 'Exact', p: POINTS.POWERPLAY_EXACT },
@@ -234,33 +287,44 @@ export default function PredictPage() {
             </div>
           ))}
         </div>
-        <div className="flex items-center gap-3">
-          <input type="number" min="0" max="120"
-            disabled={!isOpen}
-            value={guess}
-            onChange={e => setGuess(e.target.value)}
-            placeholder="e.g. 52"
-            className="input-field flex-1 text-center text-2xl font-bold disabled:opacity-50 disabled:cursor-not-allowed"
-          />
-          <div className="text-right min-w-[48px]">
-            <div className="text-xs text-gray-400">runs</div>
-            {pts !== null && <div className="text-lg font-bold text-green-600">+{pts}</div>}
+        {isFuture ? (
+          <div className="text-xs text-center text-gray-400 py-3 bg-gray-50 rounded-xl">
+            Predictions not open yet — admin will open before the powerplay
           </div>
-        </div>
-        {isClosed && (
-          <p className="text-xs text-center text-orange-500 mt-2 bg-orange-50 rounded-xl py-2">
-            🔒 Your guess is locked — waiting for actual score
-          </p>
-        )}
-        {isCompleted && actualScore != null && (
-          <div className="text-xs text-center mt-2">
-            Actual: <strong>{actualScore} runs</strong>
-            {guess !== '' && (
-              <span className={`ml-2 font-bold ${pts != null && pts > 0 ? 'text-green-600' : 'text-red-500'}`}>
-                {pts != null && pts > 0 ? `+${pts} pts ✓` : '0 pts ✗'}
-              </span>
+        ) : (
+          <>
+            <div className="flex items-center gap-3">
+              <input type="number" min="0" max="120"
+                disabled={!isOpen}
+                value={guess}
+                onChange={e => setGuess(e.target.value)}
+                placeholder="e.g. 52"
+                className="input-field flex-1 text-center text-2xl font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+              />
+              <div className="text-right min-w-[48px]">
+                <div className="text-xs text-gray-400">runs</div>
+                {pts !== null && <div className="text-lg font-bold text-green-600">+{pts}</div>}
+              </div>
+            </div>
+            {isClosed && (
+              <p className="text-xs text-center text-orange-500 mt-2 bg-orange-50 rounded-xl py-2">
+                🔒 Your guess is locked — waiting for actual score
+              </p>
             )}
-          </div>
+            {isCompleted && (
+              <div className="text-xs text-center mt-2">
+                {actualScore != null
+                  ? <>Actual: <strong>{actualScore} runs</strong>
+                    {guess !== '' && (
+                      <span className={`ml-2 font-bold ${pts != null && pts > 0 ? 'text-green-600' : 'text-red-500'}`}>
+                        {pts != null && pts > 0 ? `+${pts} pts ✓` : '0 pts ✗'}
+                      </span>
+                    )}</>
+                  : <span className="text-gray-400">No score recorded</span>
+                }
+              </div>
+            )}
+          </>
         )}
       </div>
     )
@@ -268,10 +332,13 @@ export default function PredictPage() {
 
   // ── Section headers ─────────────────────────────────────────────────────
   const renderedSections: JSX.Element[] = []
-  let lastGroupState: QState | null = null
+  let lastGroupState: string | null = null
 
   visibleQuestions.forEach(q => {
-    const groupState = q.state === 'open' ? 'open' : q.state === 'closed' ? 'closed' : 'completed'
+    const groupState = q.state === 'open' ? 'open'
+      : q.state === 'closed' ? 'closed'
+      : q.state === 'completed' ? 'completed'
+      : 'future'
     if (groupState !== lastGroupState) {
       if (groupState === 'open') {
         renderedSections.push(
@@ -285,8 +352,10 @@ export default function PredictPage() {
             <div className="w-2 h-2 rounded-full bg-orange-400 animate-pulse" /> Locked — Awaiting Result
           </div>
         )
-      } else {
+      } else if (groupState === 'completed') {
         renderedSections.push(<div key="hdr-done" className="section-title">Results In</div>)
+      } else {
+        renderedSections.push(<div key="hdr-future" className="section-title">Coming Up</div>)
       }
       lastGroupState = groupState
     }

@@ -61,11 +61,17 @@ export default function UserPartyPage() {
   const pp1s = pp ? ((pp as any).team1State || 'future') : null
   const pp2s = pp ? ((pp as any).team2State || 'future') : null
 
-  const tossOpen  = ts  === 'open'
-  const matchOpen = ms  === 'open'
+  const tossOpen  = ts   === 'open'
+  const matchOpen = ms   === 'open'
   const pp1Open   = pp1s === 'open'
   const pp2Open   = pp2s === 'open'
+  // closed = locked awaiting result, completed = result in
+  const tossClosed  = ts   === 'closed'
+  const matchClosed = ms   === 'closed'
+  const pp1Closed   = pp1s === 'closed'
+  const pp2Closed   = pp2s === 'closed'
   const anyOpen   = tossOpen || matchOpen || pp1Open || pp2Open
+  const anyLocked = tossClosed || matchClosed || pp1Closed || pp2Closed
 
   // Results section — only show questions that are 'completed'
   const closedPredictions: any[] = []
@@ -154,13 +160,16 @@ export default function UserPartyPage() {
             )}
 
             {/* Open predictions — TOP */}
-            {party.status === 'active' && anyOpen && (
-              <div className="card p-4 border-2 border-ipl-orange/30 bg-ipl-orange-light">
+            {party.status === 'active' && (anyOpen || anyLocked) && (
+              <div className={`card p-4 border-2 ${anyOpen ? 'border-ipl-orange/30 bg-ipl-orange-light' : 'border-orange-200 bg-orange-50'}`}>
                 <div className="flex items-center gap-2 mb-3">
-                  <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                  <span className="text-sm font-semibold text-ipl-orange">Predictions Open!</span>
+                  <div className={`w-2 h-2 rounded-full animate-pulse ${anyOpen ? 'bg-green-500' : 'bg-orange-400'}`} />
+                  <span className={`text-sm font-semibold ${anyOpen ? 'text-ipl-orange' : 'text-orange-600'}`}>
+                    {anyOpen ? 'Predictions Open!' : 'Predictions Locked'}
+                  </span>
                 </div>
                 <div className="space-y-1.5 mb-3">
+                  {/* Open questions */}
                   {tossOpen && (
                     <div className="flex items-center justify-between text-xs">
                       <span className="text-gray-600">🪙 Toss</span>
@@ -203,6 +212,31 @@ export default function UserPartyPage() {
                           : <span className="text-red-500">Not guessed</span>}
                         <span className="text-gray-400">up to +{POINTS.POWERPLAY_EXACT}pts</span>
                       </div>
+                    </div>
+                  )}
+                  {/* Locked questions — closed, awaiting result */}
+                  {tossClosed && (
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-gray-500">🪙 Toss</span>
+                      <span className="text-orange-500">🔒 {prediction?.tossWinner ? `Picked: ${prediction.tossWinner}` : 'Not picked'}</span>
+                    </div>
+                  )}
+                  {matchClosed && (
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-gray-500">🏆 Match Winner</span>
+                      <span className="text-orange-500">🔒 {prediction?.matchWinner ? `Picked: ${prediction.matchWinner}` : 'Not picked'}</span>
+                    </div>
+                  )}
+                  {pp1Closed && match && (
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-gray-500">⚡ {match.team1} PP</span>
+                      <span className="text-orange-500">🔒 {prediction?.powerplayGuess1 != null ? `${prediction.powerplayGuess1} runs` : 'Not guessed'}</span>
+                    </div>
+                  )}
+                  {pp2Closed && match && (
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-gray-500">⚡ {match.team2} PP</span>
+                      <span className="text-orange-500">🔒 {prediction?.powerplayGuess2 != null ? `${prediction.powerplayGuess2} runs` : 'Not guessed'}</span>
                     </div>
                   )}
                 </div>
