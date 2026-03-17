@@ -19,7 +19,7 @@ service cloud.firestore {
     match /watchParties/{partyId} {
       allow read: if isAuthenticated();
       allow create: if isHost();
-      allow update: if isAdmin() || isPartyHost(partyId);
+      allow update: if isAuthenticated() || isAdmin() || isPartyHost(partyId);
       allow delete: if isAdmin() || isPartyHost(partyId);
     }
     match /users/{userId} {
@@ -35,7 +35,8 @@ service cloud.firestore {
     }
     match /scores/{scoreId} {
       allow read: if isAuthenticated();
-      allow write: if isAdmin();
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAdmin() || (isAuthenticated() && resource.data.userId == request.auth.uid);
     }
     match /leaderboards/{partyId} {
       allow read: if isAuthenticated();
