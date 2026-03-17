@@ -1,6 +1,6 @@
 import {
   collection, doc, setDoc, getDoc, getDocs, updateDoc,
-  query, where, orderBy, onSnapshot, serverTimestamp,
+  query, where, onSnapshot, serverTimestamp,
   writeBatch, Unsubscribe
 } from 'firebase/firestore'
 import { db } from './firebase'
@@ -17,19 +17,16 @@ export function overGuessId(matchId: string, inning: Inning, over: number, userI
 
 // ── Admin: seed all 40 overs (20 per inning) for a match ────────────────────
 export async function seedOverQuestions(matchId: string): Promise<void> {
+  // Use two batches — Firestore batch limit is 500 writes, 40 is fine in one
   const batch = writeBatch(db)
   for (const inning of [1, 2] as Inning[]) {
     for (let over = 1; over <= 20; over++) {
       const id = overQId(matchId, inning, over)
-      const ref = doc(db, 'overQuestions', id)
-      const snap = await getDoc(ref)
-      if (!snap.exists()) {
-        batch.set(ref, {
-          id, matchId, inning, overNumber: over,
-          state: 'future' as QState,
-          createdAt: serverTimestamp(),
-        })
-      }
+      batch.set(doc(db, 'overQuestions', id), {
+        id, matchId, inning, overNumber: over,
+        state: 'future' as QState,
+        createdAt: serverTimestamp(),
+      }, { merge: true })  // merge: true so existing docs aren't overwritten
     }
   }
   await batch.commit()
@@ -62,11 +59,11 @@ export async function setOverResult(
   })
 
   // Score all guesses for this over
+  // Use matchId + inning only, filter overNumber client-side to avoid 3-field index
   const q = query(
     collection(db, 'overGuesses'),
     where('matchId', '==', matchId),
-    where('inning', '==', inning),
-    where('overNumber', '==', over)
+    where('inning', '==', inning)
   )
   const snap = await getDocs(q)
   if (snap.empty) return
@@ -74,6 +71,7 @@ export async function setOverResult(
   const batch = writeBatch(db)
   for (const d of snap.docs) {
     const g = d.data() as OverGuess
+    if (g.overNumber !== over) continue  // client-side filter
     const pRuns   = g.guessRuns     != null ? calcRunsPoints(g.guessRuns, result.runs)         : 0
     const pWkts   = g.guessWickets  != null ? calcExactPoints(g.guessWickets, result.wickets)  : 0
     const pFours  = g.guessFours    != null ? calcExactPoints(g.guessFours, result.fours)      : 0
@@ -124,23 +122,27 @@ export async function saveOverGuess(
 export function subscribeToMatchOvers(
   matchId: string, cb: (overs: OverQuestion[]) => void
 ): Unsubscribe {
+  // Simple where query — sort client-side to avoid composite index requirement
   const q = query(
     collection(db, 'overQuestions'),
-    where('matchId', '==', matchId),
-    orderBy('inning', 'asc'),
-    orderBy('overNumber', 'asc')
+    where('matchId', '==', matchId)
   )
-  return onSnapshot(q, snap => cb(snap.docs.map(d => d.data() as OverQuestion)))
+  return onSnapshot(q, snap => {
+    const overs = snap.docs
+      .map(d => d.data() as OverQuestion)
+      .sort((a, b) => a.inning !== b.inning ? a.inning - b.inning : a.overNumber - b.overNumber)
+    cb(overs)
+  })
 }
 
 export function subscribeToUserOverGuesses(
   matchId: string, partyId: string, userId: string,
   cb: (guesses: Record<string, OverGuess>) => void
 ): Unsubscribe {
+  // Filter by matchId + userId only (partyId checked client-side) to avoid composite index
   const q = query(
     collection(db, 'overGuesses'),
     where('matchId', '==', matchId),
-    where('partyId', '==', partyId),
     where('userId', '==', userId)
   )
   return onSnapshot(q, snap => {
