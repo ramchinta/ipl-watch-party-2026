@@ -12,43 +12,29 @@ export async function getLeaderboard(partyId: string): Promise<LeaderboardEntry[
     orderBy('totalPoints', 'desc')
   )
   const snap = await getDocs(q)
-  return snap.docs.map((d, i) => ({
-    rank: i + 1,
-    ...d.data(),
-  } as LeaderboardEntry))
+  return snap.docs.map((d, i) => ({ rank: i + 1, ...d.data() } as LeaderboardEntry))
 }
 
-export function subscribeToLeaderboard(
-  partyId: string,
-  cb: (entries: LeaderboardEntry[]) => void
-): Unsubscribe {
+export function subscribeToLeaderboard(partyId: string, cb: (entries: LeaderboardEntry[]) => void): Unsubscribe {
   const q = query(
     collection(db, 'scores'),
     where('partyId', '==', partyId),
     orderBy('totalPoints', 'desc')
   )
   return onSnapshot(q, (snap) => {
-    const entries = snap.docs.map((d, i) => ({
-      rank: i + 1,
-      ...d.data(),
-    } as LeaderboardEntry))
-    cb(entries)
+    cb(snap.docs.map((d, i) => ({ rank: i + 1, ...d.data() } as LeaderboardEntry)))
   })
 }
 
-// Host: adjust bonus points for a user in a party
-export async function adjustBonusPoints(
-  partyId: string,
-  userId: string,
-  delta: number
-): Promise<void> {
+export async function adjustBonusPoints(partyId: string, userId: string, delta: number): Promise<void> {
   const scoreRef = doc(db, 'scores', `${partyId}_${userId}`)
   const snap = await getDoc(scoreRef)
-  if (!snap.exists()) throw new Error('Score not found')
+  if (!snap.exists()) throw new Error('Score not found — user may not have joined this party yet')
 
   const current = snap.data() as Score
-  const newBonus = current.bonusPoints + delta
-  const newTotal = current.tossPoints + current.matchPoints + newBonus
+  const newBonus = (current.bonusPoints || 0) + delta
+  const newTotal = (current.tossPoints || 0) + (current.matchPoints || 0) +
+                   (current.powerplayPoints || 0) + newBonus
 
   await updateDoc(scoreRef, {
     bonusPoints: newBonus,

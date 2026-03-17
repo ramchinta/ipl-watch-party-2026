@@ -20,19 +20,28 @@ export type IPLTeam =
   | 'GT' | 'RR' | 'LSG' | 'DC' | 'PBKS'
 
 export const IPL_TEAMS: { id: IPLTeam; name: string; color: string }[] = [
-  { id: 'MI',   name: 'Mumbai Indians',          color: 'bg-blue-600 text-white' },
-  { id: 'CSK',  name: 'Chennai Super Kings',     color: 'bg-yellow-400 text-yellow-900' },
+  { id: 'MI',   name: 'Mumbai Indians',              color: 'bg-blue-600 text-white' },
+  { id: 'CSK',  name: 'Chennai Super Kings',         color: 'bg-yellow-400 text-yellow-900' },
   { id: 'RCB',  name: 'Royal Challengers Bengaluru', color: 'bg-red-600 text-white' },
-  { id: 'KKR',  name: 'Kolkata Knight Riders',   color: 'bg-purple-700 text-white' },
-  { id: 'SRH',  name: 'Sunrisers Hyderabad',     color: 'bg-orange-500 text-white' },
-  { id: 'GT',   name: 'Gujarat Titans',          color: 'bg-cyan-600 text-white' },
-  { id: 'RR',   name: 'Rajasthan Royals',        color: 'bg-pink-500 text-white' },
-  { id: 'LSG',  name: 'Lucknow Super Giants',    color: 'bg-teal-500 text-white' },
-  { id: 'DC',   name: 'Delhi Capitals',          color: 'bg-blue-400 text-white' },
-  { id: 'PBKS', name: 'Punjab Kings',            color: 'bg-red-400 text-white' },
+  { id: 'KKR',  name: 'Kolkata Knight Riders',       color: 'bg-purple-700 text-white' },
+  { id: 'SRH',  name: 'Sunrisers Hyderabad',         color: 'bg-orange-500 text-white' },
+  { id: 'GT',   name: 'Gujarat Titans',              color: 'bg-cyan-600 text-white' },
+  { id: 'RR',   name: 'Rajasthan Royals',            color: 'bg-pink-500 text-white' },
+  { id: 'LSG',  name: 'Lucknow Super Giants',        color: 'bg-teal-500 text-white' },
+  { id: 'DC',   name: 'Delhi Capitals',              color: 'bg-blue-400 text-white' },
+  { id: 'PBKS', name: 'Punjab Kings',                color: 'bg-red-400 text-white' },
 ]
 
-export type MatchStatus = 'upcoming' | 'toss_open' | 'toss_closed' | 'match_open' | 'match_closed' | 'live' | 'completed'
+export type MatchStatus =
+  | 'upcoming' | 'toss_open' | 'toss_closed'
+  | 'match_open' | 'match_closed' | 'live' | 'completed'
+
+export interface PowerplayScores {
+  team1Score?: number   // actual powerplay score for team1 (set by admin)
+  team2Score?: number   // actual powerplay score for team2
+  team1Open: boolean    // can users still guess team1 powerplay?
+  team2Open: boolean    // can users still guess team2 powerplay?
+}
 
 export interface Match {
   id: string
@@ -47,6 +56,7 @@ export interface Match {
   tossWinner?: IPLTeam
   tossPredictionOpen: boolean
   matchPredictionOpen: boolean
+  powerplay?: PowerplayScores
   result?: {
     winner: IPLTeam
     margin: string
@@ -62,10 +72,10 @@ export interface WatchParty {
   hostId: string
   hostName: string
   matchId: string
-  joinCode: string       // 6-char alphanumeric, per party
-  qrCodeUrl: string      // host-level QR, per host
+  joinCode: string
+  qrCodeUrl: string
   status: PartyStatus
-  members: string[]      // user UIDs
+  members: string[]
   createdAt: Timestamp
   startedAt?: Timestamp
   completedAt?: Timestamp
@@ -78,6 +88,10 @@ export interface Prediction {
   matchId: string
   tossWinner?: IPLTeam
   matchWinner?: IPLTeam
+  powerplayGuess1?: number   // user's guess for team1 powerplay score
+  powerplayGuess2?: number   // user's guess for team2 powerplay score
+  powerplayPoints1?: number  // calculated points for powerplay1
+  powerplayPoints2?: number  // calculated points for powerplay2
   locked: boolean
   createdAt: Timestamp
   updatedAt: Timestamp
@@ -90,7 +104,8 @@ export interface Score {
   favoriteTeam?: IPLTeam
   tossPoints: number
   matchPoints: number
-  bonusPoints: number    // host-awarded manual points
+  powerplayPoints: number    // total powerplay points
+  bonusPoints: number
   totalPoints: number
   updatedAt: Timestamp
 }
@@ -112,4 +127,19 @@ export interface PredictionWindow {
 export const POINTS = {
   TOSS_CORRECT: 10,
   MATCH_CORRECT: 20,
+  POWERPLAY_EXACT: 15,    // exact score
+  POWERPLAY_CLOSE_1: 10,  // within 1 run
+  POWERPLAY_CLOSE_3: 7,   // within 3 runs
+  POWERPLAY_CLOSE_5: 5,   // within 5 runs
+  POWERPLAY_CLOSE_8: 2,   // within 8 runs
+}
+
+export function calcPowerplayPoints(guess: number, actual: number): number {
+  const diff = Math.abs(guess - actual)
+  if (diff === 0) return POINTS.POWERPLAY_EXACT
+  if (diff <= 1)  return POINTS.POWERPLAY_CLOSE_1
+  if (diff <= 3)  return POINTS.POWERPLAY_CLOSE_3
+  if (diff <= 5)  return POINTS.POWERPLAY_CLOSE_5
+  if (diff <= 8)  return POINTS.POWERPLAY_CLOSE_8
+  return 0
 }

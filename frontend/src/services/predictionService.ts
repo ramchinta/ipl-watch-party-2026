@@ -14,43 +14,35 @@ export async function savePrediction(
   partyId: string,
   matchId: string,
   tossWinner?: IPLTeam,
-  matchWinner?: IPLTeam
+  matchWinner?: IPLTeam,
+  powerplayGuess1?: number,
+  powerplayGuess2?: number
 ): Promise<void> {
   const id = predId(partyId, matchId, userId)
   const ref = doc(db, 'predictions', id)
   const snap = await getDoc(ref)
 
-  if (snap.exists() && snap.data().locked) {
-    throw new Error('Predictions are locked')
-  }
+  if (snap.exists() && snap.data().locked) throw new Error('Predictions are locked')
 
   await setDoc(ref, {
-    id,
-    userId,
-    partyId,
-    matchId,
+    id, userId, partyId, matchId,
     tossWinner: tossWinner ?? null,
     matchWinner: matchWinner ?? null,
+    powerplayGuess1: powerplayGuess1 ?? null,
+    powerplayGuess2: powerplayGuess2 ?? null,
     locked: false,
     createdAt: snap.exists() ? snap.data().createdAt : serverTimestamp(),
     updatedAt: serverTimestamp(),
   })
 }
 
-export async function getUserPrediction(
-  partyId: string,
-  matchId: string,
-  userId: string
-): Promise<Prediction | null> {
+export async function getUserPrediction(partyId: string, matchId: string, userId: string): Promise<Prediction | null> {
   const snap = await getDoc(doc(db, 'predictions', predId(partyId, matchId, userId)))
   if (!snap.exists()) return null
   return snap.data() as Prediction
 }
 
-export async function getPartyPredictions(
-  partyId: string,
-  matchId: string
-): Promise<Prediction[]> {
+export async function getPartyPredictions(partyId: string, matchId: string): Promise<Prediction[]> {
   const q = query(
     collection(db, 'predictions'),
     where('partyId', '==', partyId),
@@ -61,9 +53,7 @@ export async function getPartyPredictions(
 }
 
 export function subscribeToUserPrediction(
-  partyId: string,
-  matchId: string,
-  userId: string,
+  partyId: string, matchId: string, userId: string,
   cb: (p: Prediction | null) => void
 ): Unsubscribe {
   return onSnapshot(doc(db, 'predictions', predId(partyId, matchId, userId)), (snap) => {

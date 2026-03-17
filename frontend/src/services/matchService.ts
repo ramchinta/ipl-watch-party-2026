@@ -95,3 +95,40 @@ export function subscribeToAllMatches(cb: (matches: Match[]) => void): Unsubscri
     cb(snap.docs.map(d => ({ id: d.id, ...d.data() } as Match)))
   })
 }
+
+// ── Powerplay controls ────────────────────────────────────────────────────────
+export async function openPowerplay(matchId: string, team: 1 | 2): Promise<void> {
+  const field = team === 1 ? 'powerplay.team1Open' : 'powerplay.team2Open'
+  await updateDoc(doc(db, 'matches', matchId), {
+    [field]: true,
+    updatedAt: serverTimestamp(),
+  })
+}
+
+export async function closePowerplay(matchId: string, team: 1 | 2): Promise<void> {
+  const field = team === 1 ? 'powerplay.team1Open' : 'powerplay.team2Open'
+  await updateDoc(doc(db, 'matches', matchId), {
+    [field]: false,
+    updatedAt: serverTimestamp(),
+  })
+}
+
+export async function setPowerplayScore(matchId: string, team: 1 | 2, score: number): Promise<void> {
+  const field = team === 1 ? 'powerplay.team1Score' : 'powerplay.team2Score'
+  const openField = team === 1 ? 'powerplay.team1Open' : 'powerplay.team2Open'
+  await updateDoc(doc(db, 'matches', matchId), {
+    [field]: score,
+    [openField]: false,  // auto-close when score is set
+    updatedAt: serverTimestamp(),
+  })
+}
+
+export async function initPowerplay(matchId: string): Promise<void> {
+  await updateDoc(doc(db, 'matches', matchId), {
+    powerplay: {
+      team1Open: false,
+      team2Open: false,
+    },
+    updatedAt: serverTimestamp(),
+  })
+}
